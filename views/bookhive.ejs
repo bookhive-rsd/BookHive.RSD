@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BookHive</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/chat.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #ddd;
+    }
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      transition: all 0.3s;
+      border-bottom: 3px solid transparent;
+    }
+    .tab.active {
+      color: #007bff;
+      border-bottom: 3px solid #007bff;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .book-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      position: relative;
+    }
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+    .dropdown-toggle {
+      background-color: #28a745;
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+    .dropdown-toggle:hover {
+      background-color: #218838;
+    }
+    .dropdown-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background-color: #ffffff;
+      color: #333333;
+      min-width: 160px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      border: 1px solid #cccccc;
+      border-radius: 4px;
+      margin-top: 5px;
+      z-index: 1000;
+      list-style: none;
+      padding: 0;
+    }
+    .dropdown-menu.active {
+      display: block;
+    }
+    .dropdown-item {
+      color: #333333;
+      padding: 8px 12px;
+      text-decoration: none;
+      display: block;
+      font-size: 14px;
+      background-color: #ffffff;
+      border-bottom: 1px solid #f0f0f0;
+      transition: background-color 0.2s;
+      cursor: pointer;
+    }
+    .dropdown-item:hover {
+      background-color: #f5f5f5;
+    }
+    .analysis-modal {
+      display: none;
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #ffffff;
+      color: #333333;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      max-width: 600px;
+      width: 90%;
+      max-height: 70vh;
+      overflow-y: auto;
+      z-index: 1000;
+      scrollbar-width: thin;
+      scrollbar-color: #cccccc #f5f5f5;
+    }
+    .analysis-modal::-webkit-scrollbar {
+      width: 8px;
+    }
+    .analysis-modal::-webkit-scrollbar-track {
+      background: #f5f5f5;
+      border-radius: 4px;
+    }
+    .analysis-modal::-webkit-scrollbar-thumb {
+      background: #cccccc;
+      border-radius: 4px;
+    }
+    .analysis-modal::-webkit-scrollbar-thumb:hover {
+      background: #aaaaaa;
+    }
+    .analysis-modal h3 {
+      margin-top: 0;
+      font-size: 20px;
+      color: #333333;
+      position: sticky;
+      top: 0;
+      background-color: #ffffff;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .analysis-content {
+      margin: 10px 0;
+      font-size: 16px;
+      line-height: 1.5;
+      color: #555555;
+      padding-right: 10px;
+    }
+    .analysis-content ol {
+      padding-left: 20px;
+      margin: 10px 0;
+    }
+    .analysis-content ol li {
+      margin-bottom: 10px;
+    }
+    .analysis-modal .error-message {
+      color: #dc3545;
+      font-size: 14px;
+      margin: 10px 0;
+    }
+    .analysis-modal .loading {
+      color: #007bff;
+      font-size: 14px;
+      margin: 10px 0;
+      text-align: center;
+    }
+    .analysis-modal button {
+      background-color: #007bff;
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      position: sticky;
+      bottom: 0;
+      margin-top: 10px;
+      float: right;
+    }
+    .analysis-modal button:hover {
+      background-color: #0056b3;
+    }
+    .book-card {
+      overflow: visible !important;
+      position: relative;
+    }
+    .book-info {
+      overflow: visible !important;
+    }
+    .alert {
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .alert-error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .alert .close-btn {
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 1.2em;
+      line-height: 1;
+      border: none;
+      background: none;
+      padding: 0 5px;
+    }
+    .form-container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .form-help {
+      font-size: 0.9em;
+      color: #666;
+      margin-top: 5px;
+    }
+    .file-help {
+      font-size: 0.9em;
+      color: #721c24;
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1em;
+      background-color: #4285f4;
+      color: white;
+    }
+    .btn-primary {
+      background-color: #4285f4;
+    }
+    .btn-primary:hover {
+      background-color: #3267d6;
+    }
+    .btn-disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    .visibility-info {
+      display: none;
+      margin-top: 5px;
+      font-size: 0.9em;
+    }
+    .storage-usage {
+      font-size: 0.9em;
+      color: #666;
+      margin-top: 10px;
+    }
+    .validation-message {
+      font-size: 0.9em;
+      margin-top: 5px;
+      display: none;
+    }
+    .validation-message.valid {
+      color: #28a745;
+      display: block;
+    }
+    .validation-message.invalid {
+      color: #721c24;
+      display: block;
+    }
+    .validation-message.loading {
+      color: #666;
+      display: block;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      z-index: 1000;
+    }
+    .modal-content {
+      background-color: #fff;
+      margin: 15% auto;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 500px;
+      width: 90%;
+    }
+    .modal-content .close {
+      float: right;
+      font-size: 1.5em;
+      cursor: pointer;
+    }
+    .access-list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .btn-small {
+      padding: 5px 10px;
+      font-size: 0.9em;
+    }
+    .btn-danger {
+      background-color: #dc3545;
+    }
+    .btn-danger:hover {
+      background-color: #c82333;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="logo-section">
+        <a href="/">
+          <img src="/images/logo.jpg" alt="BookHive Logo" class="logo">
+        </a>
+      </div>
+      <nav class="nav-menu">
+        <a href="/applications" class="nav-link"><i class="fas fa-th"></i> Applications</a>
+        <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
+        <a href="/publications" class="nav-link"><i class="fas fa-book-open"></i> Publications</a>
+        <a href="/bookhive" class="nav-link active"><i class="fas fa-book"></i> BookHive</a>
+        <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
+        <!-- <a href="/account" class="nav-link"><i class="fas fa-user"></i> Account</a> -->
+        <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="tabs">
+      <div class="tab active" data-tab="explore">Explore</div>
+      <div class="tab" data-tab="library">My Library</div>
+      <div class="tab" data-tab="upload">Upload</div>
+    </div>
+
+    <div class="share-action-buttons">
+      <div class="share-container">
+        <div class="share-toggle" title="Share Page">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
+          </svg>
+        </div>
+        <div class="share-options">
+          <button class="share-option" data-platform="whatsapp" title="Share on WhatsApp">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" class="share-icon">
+            WhatsApp
+          </button>
+          <button class="share-option" data-platform="instagram" title="Share on Instagram">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png" alt="Instagram" class="share-icon">
+            Instagram
+          </button>
+          <button class="share-option" data-platform="x" title="Share on X">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6f/Logo_of_Twitter.svg" alt="X" class="share-icon">
+            X
+          </button>
+          <button class="share-option" data-platform="copy" title="Copy Link">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+            </svg>
+            Copy Link
+          </button>
+        </div>
+        <div id="shareMessage" class="share-message"></div>
+      </div>
+      
+      <div class="notes-container">
+        <div class="notes-toggle" title="Notepad">✏️</div>
+        <div class="notes-area">
+          <div id="notesText" class="content-editable" contenteditable="true"><%- note %></div>
+        </div>
+      </div>
+      
+      <div class="feedback-container">
+        <div class="feedback-toggle" title="Provide Feedback">
+          <svg fill="currentColor" viewBox="0 0 24 24">
+            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+            <path d="M9 11h2v2H9zm0-4h2v2H9zm4 0h2v2h-2z"/>
+          </svg>
+        </div>
+        <div class="feedback-area">
+          <textarea id="feedbackText" placeholder="Write your feedback here..." required></textarea>
+          <button class="submit-feedback">Submit</button>
+          <div id="feedbackMessage" class="feedback-message"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Explore Tab -->
+    <div class="tab-content active" id="explore">
+      <div class="search-container">
+        <form id="explore-search-form">
+          <input type="text" id="explore-search-input" placeholder="Search by title, author or tags">
+          <button type="submit" class="btn">Search</button>
+        </form>
+      </div>
+      <section class="all-books">
+        <div class="book-grid" id="explore-books-container">
+          <% if (newBooks && newBooks.length > 0) { %>
+            <% newBooks.forEach(book => { %>
+              <div class="book-card" data-id="<%= book._id %>">
+                <div class="book-cover">
+                  <img src="/thumbnail/<%= book._id %>" alt="<%= book.title %> cover" class="thumbnail" onerror="this.src='/images/default-thumbnail.png'">
+                </div>
+                <div class="book-info">
+                  <h3><%= book.title %></h3>
+                  <p class="author">by <%= book.author %></p>
+                  <p class="visibility">
+                    <span class="visibility-badge visibility-<%= book.visibility %>">
+                      <%= book.visibility.charAt(0).toUpperCase() + book.visibility.slice(1) %>
+                    </span>
+                  </p>
+                  <div class="book-actions">
+                    <% if (book.hasAccess || book.visibility === 'public') { %>
+                      <a href="/view/<%= book._id %>" class="btn btn-primary">View</a>
+                      <!-- <div class="dropdown">
+                        <button class="dropdown-toggle">AI Document Analyzer</button>
+                        <ul class="dropdown-menu">
+                          <li><a href="#" class="dropdown-item analyze-option" data-book-id="<%= book._id %>" data-action="Summarize">Summarize</a></li>
+                          <li><a href="#" class="dropdown-item analyze-option" data-book-id="<%= book._id %>" data-action="Questions">Questions</a></li>
+                          <li><a href="#" class="dropdown-item analyze-option" data-book-id="<%= book._id %>" data-action="UseCase">UseCase</a></li>
+                        </ul>
+                      </div> -->
+                    <% } else if (book.visibility === 'restricted') { %>
+                      <% if (pendingBookIds && pendingBookIds.includes(book._id.toString())) { %>
+                        <button class="btn btn-secondary disabled" disabled>Request Sent</button>
+                      <% } else { %>
+                        <button class="btn btn-secondary request-access" data-book-id="<%= book._id %>">Request Access</button>
+                      <% } %>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+            <% }) %>
+          <% } else { %>
+            <div class="empty-state">
+              <p>No books available.</p>
+            </div>
+          <% } %>
+        </div>
+      </section>
+    </div>
+
+    <!-- Library Tab -->
+    <div class="tab-content" id="library">
+      <div class="search-container">
+        <form id="library-search-form">
+          <input type="text" id="library-search-input" placeholder="Search your library..." required>
+          <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+      </div>
+      <div class="book-grid" id="library-book-grid">
+        <% if (myBooks && myBooks.length === 0) { %>
+          <div class="empty-state">
+            <p>Your library is empty. <a href="#" class="switch-tab" data-tab="upload">Upload your first book</a> to get started.</p>
+          </div>
+        <% } else { %>
+          <% myBooks.forEach(book => { %>
+            <div class="book-card" data-id="<%= book._id %>">
+              <div class="book-cover">
+                <img src="/thumbnail/<%= book._id %>" alt="<%= book.title %> cover" class="thumbnail" onerror="this.src='/images/default-thumbnail.png'">
+              </div>
+              <div class="book-info">
+                <h3><%= book.title %></h3>
+                <p class="author"><%= book.author %></p>
+                <span class="visibility-badge visibility-<%= book.visibility %>">
+                  <%= book.visibility.charAt(0).toUpperCase() + book.visibility.slice(1) %>
+                </span>
+                <div class="book-actions">
+                  <a href="/view/<%= book._id %>" class="btn btn-primary">Read</a>
+                  <!-- <button class="btn btn-secondary manage-sharing" data-book-id="<%= book._id %>" data-visibility="<%= book.visibility %>">Share</button> -->
+                  <button class="btn btn-danger delete-book" data-book-id="<%= book._id %>">Delete</button>
+                  <!-- <div class="dropdown">
+                    <button class="dropdown-toggle">AI Document Analyzer</button>
+                    <ul class="dropdown-menu">
+                      <li><a href="#" class="dropdown-item analyze-option" data-book-id="<%= book._id %>" data-action="Summarize">Summarize</a></li>
+                      <li><a href="#" class="dropdown-item analyze-option" data-book-id="<%= book._id %>" data-action="Questions">Questions</a></li>
+                      <li><a href="#" class="dropdown-item analyze-option" data-book-id="<%= book._id %>" data-action="UseCase">UseCase</a></li>
+                    </ul>
+                  </div> -->
+                </div>
+              </div>
+            </div>
+          <% }) %>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Upload Tab -->
+    <div class="tab-content" id="upload">
+      <% if (typeof error !== 'undefined') { %>
+        <div class="alert alert-error">
+          <%= error %>
+          <button class="close-btn" onclick="this.parentElement.style.display='none'">×</button>
+        </div>
+      <% } %>
+      <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data" class="form-container">
+        <div class="form-group">
+          <label for="title">Title</label>
+          <input type="text" id="title" name="title" required>
+        </div>
+        <div class="form-group">
+          <label for="author">Author</label>
+          <input type="text" id="author" name="author" value="<%= user.username %>" required readonly>
+        </div>
+        <!-- <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" rows="3"></textarea>
+        </div> -->
+        <div class="form-group">
+          <label for="tags">Tags</label>
+          <input type="text" id="tags" name="tags" placeholder="fiction, science, textbook (comma-separated)">
+          <p class="form-help">Separate tags with commas</p>
+        </div>
+        <div class="form-group">
+          <label for="visibility">Visibility</label>
+          <select id="visibility" name="visibility" required>
+            <!-- <option value="private">Private (Only you can access)</option> -->
+            <option value="public">Public (Anyone can access)</option>
+            <!-- <option value="restricted">Restricted (Specific users with permission)</option> -->
+          </select>
+          <p class="form-help">
+            <!-- <span class="visibility-info private">Private: Only you can view and access this content.</span> -->
+            <span class="visibility-info public">Public: Any user can view and read this content.</span>
+            <!-- <span class="visibility-info restricted">Restricted: Only users you approve can access this content.</span> -->
+          </p>
+        </div>
+        <div class="form-group file-input">
+          <label for="file">File</label>
+          <input type="file" id="file" name="file" accept="application/pdf" required>
+          <p class="file-help">Only PDF files are supported (max 500MB)</p>
+          <p id="validationMessage" class="validation-message">Please select a file to validate.</p>
+        </div>
+        <div class="form-group">
+          <div class="storage-usage">
+            <p>Note: Your uploaded files count toward your storage limit</p>
+          </div>
+        </div>
+        <button type="submit" id="submitButton" class="btn btn-primary btn-disabled" disabled>Upload Book</button>
+      </form>
+    </div>
+
+    <!-- Sharing Modal -->
+    <div id="sharingModal" class="modal">
+      <div class="modal-content">
+        <span class="close">×</span>
+        <h3>Manage Sharing</h3>
+        <p id="bookTitle"></p>
+        <div class="visibility-controls">
+          <label for="visibilitySelect">Visibility:</label>
+          <select id="visibilitySelect">
+            <!-- <option value="private">Private</option> -->
+            <option value="public">Public</option>
+            <!-- <option value="restricted">Restricted</option> -->
+          </select>
+        </div>
+        <div id="accessListSection" style="display: none;">
+          <h4>Users with Access</h4>
+          <div class="access-list" id="accessList"></div>
+        </div>
+        <button id="saveVisibility" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>© 2025 BookHive. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Shared variables
+      const notesToggle = document.querySelector('.notes-toggle');
+      const notesArea = document.querySelector('.notes-area');
+      const notesText = document.getElementById('notesText');
+      const feedbackToggle = document.querySelector('.feedback-toggle');
+      const feedbackArea = document.querySelector('.feedback-area');
+      const feedbackText = document.getElementById('feedbackText');
+      const feedbackMessage = document.getElementById('feedbackMessage');
+      const submitFeedbackBtn = document.querySelector('.submit-feedback');
+      const shareToggle = document.querySelector('.share-toggle');
+      const shareOptions = document.querySelector('.share-options');
+      const shareMessage = document.getElementById('shareMessage');
+      let typingTimer;
+
+      // Tab switching
+      const tabs = document.querySelectorAll('.tab');
+      const tabContents = document.querySelectorAll('.tab-content');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          tabs.forEach(t => t.classList.remove('active'));
+          tabContents.forEach(c => c.classList.remove('active'));
+          tab.classList.add('active');
+          document.getElementById(tab.dataset.tab).classList.add('active');
+        });
+      });
+
+      // Notes functionality
+      if (notesToggle && notesArea) {
+        notesToggle.addEventListener('click', () => {
+          console.log('Notes toggle clicked');
+          notesArea.classList.toggle('active');
+          if (feedbackArea) feedbackArea.classList.remove('active');
+          if (shareOptions) shareOptions.classList.remove('active');
+        });
+
+        notesText.addEventListener('input', () => {
+          clearTimeout(typingTimer);
+          typingTimer = setTimeout(saveNotes, 1000);
+        });
+      }
+
+      async function saveNotes() {
+        const content = notesText.innerHTML;
+        try {
+          const response = await fetch('/notes/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content })
+          });
+          const data = await response.json();
+          if (!data.success) {
+            console.error('Failed to save note:', data.message);
+          }
+        } catch (err) {
+          console.error('Error saving note:', err);
+        }
+      }
+
+      // Feedback functionality
+      if (feedbackToggle && feedbackArea) {
+        feedbackToggle.addEventListener('click', () => {
+          console.log('Feedback toggle clicked');
+          feedbackArea.classList.toggle('active');
+          if (notesArea) notesArea.classList.remove('active');
+          if (shareOptions) shareOptions.classList.remove('active');
+        });
+
+        submitFeedbackBtn.addEventListener('click', async () => {
+          const content = feedbackText.value.trim();
+          if (!content) {
+            feedbackMessage.textContent = 'Please enter your feedback.';
+            feedbackMessage.className = 'feedback-message error';
+            return;
+          }
+
+          feedbackMessage.textContent = 'Submitting...';
+          feedbackMessage.className = 'feedback-message';
+
+          try {
+            const response = await fetch('/feedback', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify({ content })
+            });
+
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+              feedbackMessage.textContent = 'Feedback submitted successfully!';
+              feedbackMessage.className = 'feedback-message success';
+              feedbackText.value = '';
+              feedbackArea.classList.remove('active');
+            } else {
+              feedbackMessage.textContent = data.message || 'Failed to submit feedback.';
+              feedbackMessage.className = 'feedback-message error';
+            }
+          } catch (err) {
+            feedbackMessage.textContent = `Error submitting feedback: ${err.message}`;
+            feedbackMessage.className = 'feedback-message error';
+            console.error('Error submitting feedback:', err);
+          }
+        });
+      }
+
+      // Share functionality
+      if (shareToggle && shareOptions) {
+        shareToggle.addEventListener('click', () => {
+          console.log('Share toggle clicked');
+          shareOptions.classList.toggle('active');
+          if (notesArea) notesArea.classList.remove('active');
+          if (feedbackArea) feedbackArea.classList.remove('active');
+        });
+
+        document.addEventListener('click', (e) => {
+          if (!shareToggle.contains(e.target) && !shareOptions.contains(e.target)) {
+            shareOptions.classList.remove('active');
+          }
+        });
+
+        const shareButtons = shareOptions.querySelectorAll('.share-option');
+        shareButtons.forEach(button => {
+          button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const platform = button.dataset.platform;
+            const currentUrl = window.location.href;
+            let url = '';
+            const activeTab = document.querySelector('.tab.active').dataset.tab;
+            const shareText = `Check out the ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} page on BookHive: ${currentUrl}`;
+
+            switch (platform) {
+              case 'whatsapp':
+                url = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+                window.open(url, '_blank');
+                break;
+              case 'instagram':
+                url = `https://www.instagram.com/direct/new/?text=${encodeURIComponent(shareText)}`;
+                window.open(url, '_blank');
+                break;
+              case 'x':
+                url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+                window.open(url, '_blank');
+                break;
+              case 'copy':
+                navigator.clipboard.writeText(currentUrl).then(() => {
+                  shareMessage.textContent = 'Link copied to clipboard!';
+                  shareMessage.className = 'share-message success';
+                  setTimeout(() => {
+                    shareMessage.textContent = '';
+                    shareMessage.className = 'share-message';
+                  }, 2000);
+                }).catch(err => {
+                  shareMessage.textContent = 'Failed to copy link.';
+                  shareMessage.className = 'share-message error';
+                  console.error('Copy error:', err);
+                });
+                break;
+            }
+            shareOptions.classList.remove('active');
+          });
+        });
+      }
+
+      // Check session status
+      async function checkSession() {
+        try {
+          const response = await fetch('/account/storage-info', {
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          });
+          if (!response.ok || response.status === 401) {
+            console.warn('Session check failed, redirecting to login');
+            window.location.href = '/login';
+            return false;
+          }
+          return true;
+        } catch (err) {
+          console.error('Session check error:', err);
+          return false;
+        }
+      }
+
+      // Analyzer functionality
+      function attachAnalyzerListeners() {
+        console.log('Attaching analyzer listeners...');
+        const analyzeOptions = document.querySelectorAll('.analyze-option');
+        console.log(`Found ${analyzeOptions.length} analyze options`);
+        analyzeOptions.forEach(option => {
+          option.addEventListener('click', async (e) => {
+            e.preventDefault();
+            console.log('Analyze option clicked:', e.target.dataset.action, 'for bookId:', e.target.dataset.bookId);
+            const bookId = e.target.dataset.bookId;
+            const action = e.target.dataset.action;
+
+            if (!bookId || !action) {
+              console.error('Missing bookId or action:', { bookId, action });
+              return;
+            }
+
+            const modal = document.createElement('div');
+            modal.className = 'analysis-modal';
+            modal.innerHTML = `
+              <h3>${action.charAt(0).toUpperCase() + action.slice(1)}</h3>
+              <div class="analysis-content">
+                <p class="loading">Loading ${action.toLowerCase()}...</p>
+              </div>
+              <button>Close</button>
+            `;
+            document.body.appendChild(modal);
+            modal.style.display = 'block';
+
+            try {
+              console.log(`Sending analyze request to /book/${bookId}/analyze with action: ${action}`);
+              const response = await fetch(`/book/${bookId}/analyze`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ action })
+              });
+              console.log('Analyze response status:', response.status);
+
+              const data = await response.json();
+              const contentDiv = modal.querySelector('.analysis-content');
+              contentDiv.innerHTML = '';
+
+              if (data.success) {
+                console.log('Analysis successful:', data.result);
+                if (action === 'Summarize') {
+                  contentDiv.innerHTML = `<p>${data.result.replace(/\n/g, '<br>')}</p>`;
+                } else if (action === 'Questions' || action === 'UseCase') {
+                  const items = data.result.split('\n').filter(item => item.trim());
+                  if (items.length === 0 || data.result === `No ${action.toLowerCase()} available`) {
+                    contentDiv.innerHTML = `<p>No ${action.toLowerCase()} available</p>`;
+                  } else {
+                    const list = document.createElement('ol');
+                    items.forEach(item => {
+                      const li = document.createElement('li');
+                      li.textContent = item;
+                      list.appendChild(li);
+                    });
+                    contentDiv.appendChild(list);
+                  }
+                }
+              } else {
+                console.error('Analysis failed:', data.message);
+                contentDiv.innerHTML = `<p class="error-message">Error: ${data.message}</p>`;
+              }
+            } catch (error) {
+              console.error('Analysis error:', error);
+              modal.querySelector('.analysis-content').innerHTML = `<p class="error-message">Failed to load ${action.toLowerCase()}</p>`;
+            }
+
+            modal.querySelector('button').addEventListener('click', () => {
+              console.log('Closing analysis modal');
+              modal.remove();
+            });
+
+            const dropdownMenu = e.target.closest('.dropdown-menu');
+            if (dropdownMenu) {
+              dropdownMenu.classList.remove('active');
+            }
+          });
+        });
+      }
+
+      // Dropdown toggle functionality
+      function attachDropdownListeners() {
+        console.log('Attaching dropdown listeners...');
+        const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+        console.log(`Found ${dropdownToggles.length} dropdown toggles`);
+        dropdownToggles.forEach(toggle => {
+          toggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Dropdown toggle clicked');
+            const dropdownMenu = toggle.nextElementSibling;
+            if (dropdownMenu) {
+              const isActive = dropdownMenu.classList.contains('active');
+              document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                menu.classList.remove('active');
+              });
+              if (!isActive) {
+                dropdownMenu.classList.add('active');
+                console.log('Dropdown menu opened');
+              }
+            } else {
+              console.warn('Dropdown menu not found for toggle:', toggle);
+            }
+          });
+        });
+
+        document.addEventListener('click', (e) => {
+          if (!e.target.closest('.dropdown')) {
+            console.log('Clicked outside dropdown, closing all');
+            document.querySelectorAll('.dropdown-menu').forEach(menu => {
+              menu.classList.remove('active');
+            });
+          }
+        });
+      }
+
+      // Explore tab functionalities
+      const exploreSearchForm = document.getElementById('explore-search-form');
+      const exploreSearchInput = document.getElementById('explore-search-input');
+      const exploreBooksContainer = document.getElementById('explore-books-container');
+
+      function attachRequestAccessListeners() {
+        console.log('Attaching request access listeners...');
+        const requestButtons = document.querySelectorAll('.request-access');
+        console.log(`Found ${requestButtons.length} request access buttons`);
+        requestButtons.forEach(button => {
+          button.removeEventListener('click', handleRequestAccess);
+          button.addEventListener('click', handleRequestAccess);
+        });
+      }
+
+      async function handleRequestAccess(e) {
+        const button = e.target;
+        const bookId = button.dataset.bookId;
+        console.log(`Request access clicked for bookId: ${bookId}`);
+
+        const isAuthenticated = await checkSession();
+        if (!isAuthenticated) {
+          alert('Session expired. Please log in again.');
+          return;
+        }
+
+        try {
+          const response = await fetch(`/request-access?t=${Date.now()}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ bookId })
+          });
+
+          if (!response.ok) {
+            const contentType = response.headers.get('Content-Type');
+            let errorText = await response.text();
+            if (contentType.includes('text/html')) {
+              errorText = 'Received HTML response (possibly a login redirect)';
+            }
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+          }
+
+          const data = await response.json();
+          if (data.success) {
+            button.textContent = 'Request Sent';
+            button.disabled = true;
+            button.classList.add('disabled');
+            alert('Access request sent successfully!');
+          } else {
+            alert(`Failed to request access: ${data.message}`);
+          }
+        } catch (err) {
+          console.error(`Request access error for bookId=${bookId}:`, err);
+          alert(`Error requesting access: ${err.message}`);
+        }
+      }
+
+      exploreSearchForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const query = exploreSearchInput.value.trim();
+        if (!query) return;
+
+        console.log(`Search initiated with query: ${query}`);
+        try {
+          const response = await fetch(`/explore/search?query=${encodeURIComponent(query)}&t=${Date.now()}`, {
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          });
+
+          if (!response.ok) {
+            const contentType = response.headers.get('Content-Type');
+            let errorText = await response.text();
+            if (contentType.includes('text/html')) {
+              errorText = 'Received HTML response (possibly a login redirect)';
+            }
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+          }
+
+          const data = await response.json();
+          exploreBooksContainer.innerHTML = '';
+
+          if (!data.books || data.books.length === 0) {
+            exploreBooksContainer.innerHTML = `
+              <div class="empty-state">
+                <p>No books found matching your search.</p>
+              </div>
+            `;
+            return;
+          }
+
+          const pendingBookIds = JSON.parse('<%= JSON.stringify(pendingBookIds || []) %>');
+          const currentUser = "<%= user._id.toString() %>";
+
+          data.books.forEach(book => {
+            let bookCard = `
+              <div class="book-card" data-id="${book._id}">
+                <div class="book-cover">
+                  <img src="/thumbnail/${book._id}" alt="${book.title} cover" class="thumbnail" onerror="this.src='/images/default-thumbnail.png'">
+                </div>
+                <div class="book-info">
+                  <h3>${book.title}</h3>
+                  <p class="author">by ${book.author}</p>
+                  <p class="visibility">
+                    <span class="visibility-badge visibility-${book.visibility}">
+                      ${book.visibility.charAt(0).toUpperCase() + book.visibility.slice(1)}
+                    </span>
+                  </p>
+                  <div class="book-actions">
+            `;
+            if (book.hasAccess) {
+              bookCard += `
+                <a href="/view/${book._id}" class="btn btn-primary">View</a>
+                <div class="dropdown">
+                  <button class="dropdown-toggle">AI Document Analyzer</button>
+                  <ul class="dropdown-menu">
+                    <li><a href="#" class="dropdown-item analyze-option" data-book-id="${book._id}" data-action="Summarize">Summarize</a></li>
+                    <li><a href="#" class="dropdown-item analyze-option" data-book-id="${book._id}" data-action="Questions">Questions</a></li>
+                    <li><a href="#" class="dropdown-item analyze-option" data-book-id="${book._id}" data-action="UseCase">UseCase</a></li>
+                  </ul>
+                </div>`;
+            } else if (book.visibility === 'restricted') {
+              if (pendingBookIds.includes(book._id.toString())) {
+                bookCard += `<button class="btn btn-secondary disabled" disabled>Request Sent</button>`;
+              } else {
+                bookCard += `<button class="btn btn-secondary request-access" data-book-id="${book._id}">Request Access</button>`;
+              }
+            }
+            bookCard += `
+                  </div>
+                </div>
+              </div>
+            `;
+            exploreBooksContainer.innerHTML += bookCard;
+          });
+
+          console.log('Search results rendered, reattaching event listeners');
+          attachEventListeners();
+        } catch (err) {
+          console.error('Search error for query="' + query + '":', err);
+          exploreBooksContainer.innerHTML = `
+            <div class="empty-state">
+              <p>Error searching books: ${err.message}</p>
+            </div>
+          `;
+        }
+      });
+
+      // Library tab functionalities
+      const librarySearchForm = document.getElementById('library-search-form');
+      const librarySearchInput = document.getElementById('library-search-input');
+      const libraryBookGrid = document.getElementById('library-book-grid');
+
+      librarySearchForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const query = librarySearchInput.value.trim();
+        if (!query) return;
+        try {
+          const response = await fetch(`/library/search?query=${encodeURIComponent(query)}`);
+          const data = await response.json();
+          if (data.books) {
+            libraryBookGrid.innerHTML = '';
+            if (data.books.length === 0) {
+              libraryBookGrid.innerHTML = `
+                <div class="empty-state">
+                  <p>No books found for "${query}". <a href="#" class="switch-tab" data-tab="upload">Upload a book</a>.</p>
+                </div>
+              `;
+            } else {
+              data.books.forEach(book => {
+                const bookCard = document.createElement('div');
+                bookCard.className = 'book-card';
+                bookCard.dataset.id = book._id;
+                bookCard.innerHTML = `
+                  <div class="book-cover">
+                    <img src="/thumbnail/${book._id}" alt="${book.title} cover" class="thumbnail" onerror="this.src='/images/default-thumbnail.png'">
+                  </div>
+                  <div class="book-info">
+                    <h3>${book.title}</h3>
+                    <p class="author">${book.author}</p>
+                    <span class="visibility-badge visibility-${book.visibility}">
+                      ${book.visibility.charAt(0).toUpperCase() + book.visibility.slice(1)}
+                    </span>
+                    <div class="book-actions">
+                      <a href="/view/${book._id}" class="btn btn-primary">Read</a>
+                      <button class="btn btn-secondary manage-sharing" data-book-id="${book._id}" data-visibility="${book.visibility}">Share</button>
+                      <button class="btn btn-danger delete-book" data-book-id="${book._id}">Delete</button>
+                      <div class="dropdown">
+                        <button class="dropdown-toggle">AI Document Analyzer</button>
+                        <ul class="dropdown-menu">
+                          <li><a href="#" class="analyze-option" data-book-id="${book._id}" data-action="Summarize">Summarize</a></li>
+                          <li><a href="#" class="analyze-option" data-book-id="${book._id}" data-action="Questions">Questions</a></li>
+                          <li><a href="#" class="analyze-option" data-book-id="${book._id}" data-action="UseCase">UseCase</a></li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                `;
+                libraryBookGrid.appendChild(bookCard);
+              });
+              attachEventListeners();
+            }
+          }
+        } catch (err) {
+          console.error('Search error:', err);
+          alert('Search error');
+        }
+      });
+
+      // Library event listeners
+      function attachLibraryListeners() {
+        console.log('Attaching library event listeners...');
+        const deleteButtons = document.querySelectorAll('.delete-book');
+        console.log(`Found ${deleteButtons.length} delete buttons`);
+        deleteButtons.forEach(button => {
+          button.addEventListener('click', async (e) => {
+            console.log('Delete button clicked');
+            const bookCard = e.target.closest('.book-card');
+            const bookId = bookCard.dataset.id;
+            if (confirm('Are you sure you want to delete this book?')) {
+              try {
+                const response = await fetch(`/book/${bookId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) {
+                  bookCard.remove();
+                  if (document.querySelectorAll('#library-book-grid .book-card').length === 0) {
+                    libraryBookGrid.innerHTML = `
+                      <div class="empty-state">
+                        <p>Your library is empty. <a href="#" class="switch-tab" data-tab="upload">Upload your first book</a> to get started.</p>
+                      </div>
+                    `;
+                    attachTabSwitchListeners();
+                  }
+                } else {
+                  alert(data.message || 'Failed to delete book');
+                }
+              } catch (err) {
+                console.error('Delete error:', err);
+                alert('Error deleting book');
+              }
+            }
+          });
+        });
+
+        const sharingButtons = document.querySelectorAll('.manage-sharing');
+        const modal = document.getElementById('sharingModal');
+        const closeBtn = document.querySelector('.close');
+        const visibilitySelect = document.getElementById('visibilitySelect');
+        const accessListSection = document.getElementById('accessListSection');
+        const accessList = document.getElementById('accessList');
+        let currentBookId = null;
+
+        console.log(`Found ${sharingButtons.length} share buttons`);
+        sharingButtons.forEach(button => {
+          button.addEventListener('click', async (e) => {
+            console.log('Share button clicked');
+            const bookCard = e.target.closest('.book-card');
+            const bookId = button.dataset.bookId;
+            const bookTitle = bookCard.querySelector('h3').textContent;
+            const currentVisibility = button.dataset.visibility;
+            
+            currentBookId = bookId;
+            document.getElementById('bookTitle').textContent = bookTitle;
+            visibilitySelect.value = currentVisibility;
+            toggleAccessListSection(currentVisibility);
+            if (currentVisibility === 'restricted') {
+              await fetchAccessList(bookId);
+            }
+            modal.style.display = 'block';
+          });
+        });
+
+        if (closeBtn) {
+          closeBtn.addEventListener('click', () => {
+            console.log('Closing sharing modal');
+            modal.style.display = 'none';
+          });
+        }
+
+        window.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            console.log('Clicked outside sharing modal, closing');
+            modal.style.display = 'none';
+          }
+        });
+
+        if (visibilitySelect) {
+          visibilitySelect.addEventListener('change', () => {
+            console.log('Visibility select changed');
+            toggleAccessListSection(visibilitySelect.value);
+          });
+        }
+
+        document.getElementById('saveVisibility').addEventListener('click', async () => {
+          console.log('Save visibility clicked');
+          const newVisibility = visibilitySelect.value;
+          try {
+            const response = await fetch(`/book/${currentBookId}/visibility`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ visibility: newVisibility })
+            });
+            const data = await response.json();
+            if (data.success) {
+              const bookCard = document.querySelector(`.book-card[data-id="${currentBookId}"]`);
+              const visibilityBadge = bookCard.querySelector('.visibility-badge');
+              const manageSharingBtn = bookCard.querySelector('.manage-sharing');
+              visibilityBadge.className = `visibility-badge visibility-${newVisibility}`;
+              visibilityBadge.textContent = newVisibility.charAt(0).toUpperCase() + newVisibility.slice(1);
+              manageSharingBtn.dataset.visibility = newVisibility;
+              modal.style.display = 'none';
+              alert('Visibility updated');
+            } else {
+              alert(data.message || 'Failed to update visibility');
+            }
+          } catch (err) {
+            console.error('Visibility update error:', err);
+            alert('Error updating visibility');
+          }
+        });
+
+        function toggleAccessListSection(visibility) {
+          accessListSection.style.display = visibility === 'restricted' ? 'block' : 'none';
+        }
+
+        async function fetchAccessList(bookId) {
+          try {
+            const response = await fetch(`/book/${bookId}/access-list`);
+            const data = await response.json();
+            if (data.success) {
+              accessList.innerHTML = data.users.length === 0 ? '<p>No users have access.</p>' : '';
+              data.users.forEach(user => {
+                const listItem = document.createElement('div');
+                listItem.className = 'access-list-item';
+                listItem.innerHTML = `
+                  <span>${user.username} (${user.email})</span>
+                  <button class="btn btn-small btn-danger remove-access" data-user-id="${user._id}">Remove</button>
+                `;
+                accessList.appendChild(listItem);
+              });
+              document.querySelectorAll('.remove-access').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                  console.log('Remove access clicked');
+                  const userId = e.target.dataset.userId;
+                  try {
+                    const response = await fetch(`/book/${currentBookId}/access/${userId}`, { method: 'DELETE' });
+                    const data = await response.json();
+                    if (data.success) {
+                      e.target.closest('.access-list-item').remove();
+                      if (accessList.children.length === 0) {
+                        accessList.innerHTML = '<p>No users have access.</p>';
+                      }
+                    } else {
+                      alert(data.message || 'Failed to remove access');
+                    }
+                  } catch (err) {
+                    console.error('Remove access error:', err);
+                    alert('Error removing access');
+                  }
+                });
+              });
+            } else {
+              accessList.innerHTML = '<p>Failed to load access list.</p>';
+            }
+          } catch (err) {
+            console.error('Access list fetch error:', err);
+            accessList.innerHTML = '<p>Failed to load access list.</p>';
+          }
+        }
+      }
+
+      // Upload tab functionalities
+      const visibilitySelect = document.getElementById('visibility');
+      const visibilityInfos = document.querySelectorAll('.visibility-info');
+      const fileInput = document.getElementById('file');
+      const fileHelp = document.querySelector('.file-help');
+      const validationMessage = document.getElementById('validationMessage');
+      const submitButton = document.getElementById('submitButton');
+      const uploadForm = document.getElementById('uploadForm');
+      const originalHelpText = fileHelp.textContent;
+
+      visibilityInfos.forEach(info => {
+        info.style.display = 'none';
+      });
+
+      const showRelevantInfo = () => {
+        const selectedValue = visibilitySelect.value;
+        visibilityInfos.forEach(info => {
+          if (info.classList.contains(selectedValue)) {
+            info.style.display = 'block';
+          } else {
+            info.style.display = 'none';
+          }
+        });
+      };
+
+      showRelevantInfo();
+      visibilitySelect.addEventListener('change', showRelevantInfo);
+
+      let isFileValid = false;
+
+      async function validateFile(file) {
+        if (!file) {
+          validationMessage.textContent = 'Please select a file to validate.';
+          validationMessage.className = 'validation-message';
+          submitButton.classList.add('btn-disabled');
+          submitButton.disabled = true;
+          isFileValid = false;
+          return;
+        }
+
+        const maxSize = 500 * 1024 * 1024;
+        if (file.size > maxSize) {
+          fileHelp.textContent = 'Error: File exceeds the 500MB size limit';
+          fileHelp.style.color = 'red';
+          validationMessage.textContent = '';
+          validationMessage.className = 'validation-message';
+          submitButton.classList.add('btn-disabled');
+          submitButton.disabled = true;
+          isFileValid = false;
+          fileInput.value = '';
+          return;
+        } else if (file.type !== 'application/pdf') {
+          fileHelp.textContent = 'Error: Only PDF files are allowed';
+          fileHelp.style.color = 'red';
+          validationMessage.textContent = '';
+          validationMessage.className = 'validation-message';
+          submitButton.classList.add('btn-disabled');
+          submitButton.disabled = true;
+          isFileValid = false;
+          fileInput.value = '';
+          return;
+        }
+
+        fileHelp.textContent = originalHelpText;
+        fileHelp.style.color = '';
+        validationMessage.textContent = 'Validating file content...';
+        validationMessage.className = 'validation-message loading';
+        submitButton.classList.add('btn-disabled');
+        submitButton.disabled = true;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+          const response = await fetch('/validate-pdf', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await response.json();
+          if (data.success && data.isSafe) {
+            validationMessage.textContent = 'File is safe to upload.';
+            validationMessage.className = 'validation-message valid';
+            submitButton.classList.remove('btn-disabled');
+            submitButton.disabled = false;
+            isFileValid = true;
+          } else {
+            validationMessage.textContent = data.message || 'Adult content detected. This file cannot be uploaded.';
+            validationMessage.className = 'validation-message invalid';
+            submitButton.classList.add('btn-disabled');
+            submitButton.disabled = true;
+            isFileValid = false;
+            fileInput.value = '';
+          }
+        } catch (err) {
+          console.error('File validation error:', err);
+          validationMessage.textContent = 'Error validating file. Please try again.';
+          validationMessage.className = 'validation-message invalid';
+          submitButton.classList.add('btn-disabled');
+          submitButton.disabled = true;
+          isFileValid = false;
+          fileInput.value = '';
+        }
+      }
+
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files[0];
+        validateFile(file);
+      });
+
+      uploadForm.addEventListener('submit', (e) => {
+        if (!isFileValid) {
+          e.preventDefault();
+          validationMessage.textContent = 'Please select a valid file before submitting.';
+          validationMessage.className = 'validation-message invalid';
+        }
+      });
+
+      // Attach all event listeners
+      function attachEventListeners() {
+        console.log('Attaching all event listeners');
+        attachAnalyzerListeners();
+        attachDropdownListeners();
+        attachRequestAccessListeners();
+        attachLibraryListeners();
+        attachTabSwitchListeners();
+      }
+
+      function attachTabSwitchListeners() {
+        const switchTabLinks = document.querySelectorAll('.switch-tab');
+        switchTabLinks.forEach(link => {
+          link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const tab = link.dataset.tab;
+            tabs.forEach(t => t.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
+            document.getElementById(tab).classList.add('active');
+          });
+        });
+      }
+
+      // Initial attachment of event listeners
+      attachEventListeners();
+    });
+  </script>
+</body>
+</html>

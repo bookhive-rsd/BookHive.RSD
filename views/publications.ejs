@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="/bookhive/">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Publications - BookHive</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <style>
+    /* Ensure Quill-generated lists render correctly */
+    .publication-content ol, .publication-content ul {
+      list-style-type: decimal; /* For ordered lists */
+      padding-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .publication-content ul {
+      list-style-type: disc; /* For unordered lists */
+    }
+    .publication-content li {
+      margin-bottom: 0.5rem;
+    }
+    .publication-content p {
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans">
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="logo-section">
+        <a href="/">
+          <img src="/images/logo.jpg" alt="BookHive Logo" class="logo">
+        </a>
+      </div>
+      <nav class="nav-menu">
+          <a href="/applications" class="nav-link"><i class="fas fa-th"></i> Applications</a>
+          <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
+          <a href="/publications" class="nav-link active"><i class="fas fa-book-open"></i> Publications</a>
+          <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
+          <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
+          <!-- <a href="/account" class="nav-link"><i class="fas fa-user"></i> Account</a> -->
+          <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+      </nav>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container mx-auto mt-8 px-4">
+    <h2 class="text-3xl font-bold mb-6 text-center">Publications</h2>
+
+    <!-- Create Publication Form -->
+    <% if (user) { %>
+      <section id="publication-form" class="bg-white p-6 rounded-lg shadow-md mb-8">
+        <h3 class="text-xl font-semibold mb-4">Share Your Thoughts</h3>
+        <form id="create-publication-form" action="/publication" method="POST" enctype="multipart/form-data">
+          <div id="publication-editor-container" class="mb-4">
+            <div id="publication-editor" class="h-32"></div>
+          </div>
+          <input type="hidden" id="publication-content" name="content">
+          <div class="mb-4">
+            <label for="publication-image" class="block text-gray-700 text-sm font-bold mb-2">Upload Image (optional):</label>
+            <input type="file" id="publication-image" name="image" accept="image/jpeg,image/png" class="form-input">
+          </div>
+          <div class="flex items-center justify-between">
+            <button type="submit" id="submit-publication" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Post Publication</button>
+          </div>
+        </form>
+        <div id="publicationError" class="text-red-500 mt-2 hidden"></div>
+        <div id="publicationSuccess" class="text-green-500 mt-2 hidden"></div>
+      </section>
+    <% } %>
+
+    <!-- Publications List -->
+    <div id="publications-list" class="space-y-6">
+      <% publications.forEach(function(publication) { %>
+        <div class="bg-white p-6 rounded-lg shadow-md publication-item" data-publication-id="<%= publication._id %>">
+          <div class="flex items-center mb-4">
+            <p class="font-semibold text-lg"><%= publication.postedBy ? publication.postedBy.username : 'Unknown User' %></p>
+            <span class="text-gray-500 text-sm ml-4"><%= new Date(publication.createdAt).toLocaleString() %></span>
+          </div>
+          <div class="publication-content mb-4"><%- publication.content %></div>
+          <% if (publication.image) { %>
+            <img src="/publication-image/<%= publication._id %>" alt="Publication Image" class="max-w-full h-auto rounded-lg mb-4">
+          <% } %>
+          <div class="flex items-center space-x-4 mb-4">
+            <button class="like-button flex items-center text-blue-600 hover:text-blue-800" data-publication-id="<%= publication._id %>" data-liked="<%= user && publication.likes.includes(user._id) ? 'true' : 'false' %>">
+              <svg class="w-5 h-5 mr-1" fill="<%= user && publication.likes.includes(user._id) ? 'currentColor' : 'none' %>" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+              </svg>
+              <span class="like-count"><%= publication.likeCount || 0 %></span> <%= user && publication.likes.includes(user._id) ? 'Unlike' : 'Like' %>
+            </button>
+            <button class="comment-toggle text-blue-600 hover:text-blue-800" data-publication-id="<%= publication._id %>">Comment</button>
+          </div>
+          <!-- Comment Form -->
+          <div class="comment-form hidden" data-publication-id="<%= publication._id %>">
+            <form class="space-y-2">
+              <textarea name="content" class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600" rows="2" placeholder="Write a comment..." required></textarea>
+              <button type="submit" class="comment-btn bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" data-publication-id="<%= publication._id %>">Post Comment</button>
+            </form>
+          </div>
+          <!-- Comments List -->
+          <div class="comments-list mt-4 hidden" data-publication-id="<%= publication._id %>">
+            <% (comments[publication._id.toString()] || []).forEach(function(comment) { %>
+              <div class="comment-item border-t pt-2" data-id="<%= comment._id %>">
+                <p class="font-semibold"><%= comment.user ? comment.user.username : 'Unknown User' %></p>
+                <p class="text-gray-500 text-sm"><%= new Date(comment.createdAt).toLocaleString() %></p>
+                <p class="text-gray-600"><%= comment.content %></p>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  </main>
+
+  <!-- Pass user ID to JavaScript -->
+  <% if (user) { %>
+    <script>
+      window.currentUserId = '<%= user._id %>';
+    </script>
+  <% } %>
+
+  <footer>
+    <div class="container">
+      <p>© 2025 BookHive. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/script.js"></script>
+</body>
+</html>
