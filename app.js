@@ -2586,7 +2586,10 @@ server.listen(PORT, () => {
 });
 
 app.get('/create-app', isAuthenticated, (req, res) => {
-    res.render('create-app', { user: req.user });
+  res.render('create-app', {
+    user: req.user,
+    currentPage: 'create-app'
+  });
 });
 
 app.post('/api/applications/create', isAuthenticated, ApplicationImageUpload.single('icon'), async (req, res) => {
@@ -2691,7 +2694,6 @@ app.get('/applications', isAuthenticated, async (req, res) => {
       return res.redirect('/admin');
     }
     const userApps = await Application.find({}).select('name _id iconPath');
-    console.log('User-created apps:', userApps); // Debug log
     const applications = [
       ...userApps.map(app => ({
         id: app._id.toString(),
@@ -2699,12 +2701,12 @@ app.get('/applications', isAuthenticated, async (req, res) => {
         iconPath: app.iconPath
       }))
     ];
-    console.log('All applications:', applications); // Debug log
     res.render('application', {
       user,
       applications,
       appId: null,
-      note: req.note ? req.note.content : ''
+      note: req.note ? req.note.content : '',
+      currentPage: 'applications'
     });
   } catch (error) {
     console.error('Error fetching applications:', error);

@@ -111,6 +111,54 @@
             padding: 20px;
             color: #666;
         }
+        /* Dropdown styles */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-toggle {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #333;
+            text-decoration: none;
+            font-size: 1em;
+            padding: 10px;
+            cursor: pointer;
+        }
+        .dropdown-toggle:hover {
+            color: #4CAF50;
+        }
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            min-width: 160px;
+            z-index: 1000;
+        }
+        .dropdown-menu.active {
+            display: block;
+        }
+        .dropdown-menu a {
+            display: block;
+            padding: 10px 15px;
+            color: #333;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+        .dropdown-menu a:hover {
+            background-color: #f5f5f5;
+            color: #4CAF50;
+        }
+        .dropdown-menu a.active {
+            background-color: #e8f5e9;
+            color: #4CAF50;
+        }
         @media (max-width: 768px) {
             .app-container {
                 grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -128,6 +176,12 @@
                 width: 95%;
                 padding: 15px;
             }
+            .nav-menu.active .dropdown-menu {
+                position: static;
+                border: none;
+                box-shadow: none;
+                background-color: #f5f5f5;
+            }
         }
     </style>
 </head>
@@ -141,8 +195,13 @@
             </h1>
             <nav class="nav-menu">
                 <% if (user) { %>
-                    <a href="/applications" class="nav-link active"><i class="fas fa-th"></i> Applications</a>
-                    <a href="/create-app" class="nav-link"><i class="fas fa-plus"></i> Create App</a>
+                    <div class="dropdown">
+                        <a href="#" class="dropdown-toggle"><i class="fas fa-th"></i> Apps</a>
+                        <div class="dropdown-menu">
+                            <a href="/applications" class="nav-link <%= currentPage === 'applications' ? 'active' : '' %>"><i class="fas fa-th"></i> Applications</a>
+                            <a href="/create-app" class="nav-link <%= currentPage === 'create-app' ? 'active' : '' %>"><i class="fas fa-plus"></i> Create App</a>
+                        </div>
+                    </div>
                     <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
                     <a href="/publications" class="nav-link"><i class="fas fa-book-open"></i> Publications</a>
                     <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
@@ -203,6 +262,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Hamburger menu logic
             const hamburger = document.querySelector('.hamburger');
             const navMenu = document.querySelector('.nav-menu');
             if (hamburger && navMenu) {
@@ -212,6 +272,24 @@
                 });
             }
 
+            // Dropdown toggle logic
+            const dropdownToggle = document.querySelector('.dropdown-toggle');
+            const dropdownMenu = document.querySelector('.dropdown-menu');
+            if (dropdownToggle && dropdownMenu) {
+                dropdownToggle.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    dropdownMenu.classList.toggle('active');
+                });
+
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!dropdownToggle.contains(e.target) && !dropdownMenu.contains(e.target)) {
+                        dropdownMenu.classList.remove('active');
+                    }
+                });
+            }
+
+            // Application loading logic
             const loadAppScript = async (appId, appName) => {
                 const modal = document.getElementById('app-modal');
                 const appContent = document.getElementById('app-content');
