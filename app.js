@@ -67,7 +67,7 @@ app.use(session({
   secret: 'your-secret-key',
   resave: false,
   saveUninitialized: false,
-  store: MongoStore.create({ mongoUrl: 'mongodb://localhost:27017/' }),
+  store: MongoStore.create({ mongoUrl: 'mongodb+srv://bookhiversd:8D6pLujBM9rLVi8B@bookhive.7h76ryz.mongodb.net/BookHive?retryWrites=true&w=majority&appName=BookHive' }),
   cookie: { 
       maxAge: SESSION_TIMEOUT,
       secure: process.env.NODE_ENV === 'production',
@@ -406,7 +406,7 @@ const fetchUserAndNote = async (req, res, next) => {
 app.use(fetchUserAndNote);
 
 // MongoDB connection
-mongoose.connect('mongodb://localhost:27017/', { 
+mongoose.connect('mongodb+srv://bookhiversd:8D6pLujBM9rLVi8B@bookhive.7h76ryz.mongodb.net/BookHive?retryWrites=true&w=majority&appName=BookHive', { 
   useNewUrlParser: true, 
   useUnifiedTopology: true 
 }).then(async () => {
