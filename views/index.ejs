@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="google-site-verification" content="BDToWZC0fXPpOmjSjtAUGtt93C60RhSFjKoANDY3-ZY" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="BookHive - Your digital library to upload, organize, share, and read books seamlessly.">
+  <title>BookHive - Your Digital Library</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Add this in the <head> section to include Socket.IO client -->
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+      * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      color: #333;
+      background-color: #f9fafb;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* Header */
+    .header {
+      background: #ffffff;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    .logo-section .logo {
+      height: 77px;
+    }
+
+    .nav-menu {
+      display: flex;
+      gap: 20px;
+    }
+
+    .nav-link {
+      text-decoration: none;
+      color: #333;
+      font-weight: 500;
+      transition: color 0.3s;
+    }
+
+    .nav-link:hover {
+      color: #4a90e2;
+    }
+
+    .btn-nav-signup {
+      background: #4a90e2;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 5px;
+    }
+
+    .btn-nav-signup:hover {
+      background: #357abd;
+    }
+
+    .hamburger {
+      display: none;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    /* Hero Section */
+    .hero {
+      background: linear-gradient(135deg, #4a90e2, #50c9c3);
+      color: #fff;
+      padding: 80px 0;
+    }
+
+    .hero .container {
+      display: flex;
+      align-items: center;
+      gap: 40px;
+    }
+
+    .hero-content {
+      flex: 1;
+    }
+
+    .hero-content h1 {
+      font-size: 3rem;
+      margin-bottom: 20px;
+    }
+
+    .hero-content .highlight {
+      color: #ffd700;
+    }
+
+    .hero-content p {
+      font-size: 1.2rem;
+      margin-bottom: 30px;
+    }
+
+    .hero-image {
+      flex: 1;
+    }
+
+    .hero-image img {
+      max-width: 70%;
+      border-radius: 10px;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 15px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+
+    .btn-primary {
+      background: #ffd700;
+      color: #333;
+    }
+
+    .btn-primary:hover {
+      background: #e6c200;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 2px solid #fff;
+      color: #fff;
+    }
+
+    .btn-secondary:hover {
+      background: #fff;
+      color: #333;
+    }
+
+    /* Features Section */
+    .features {
+      padding: 60px 0;
+      background: #fff;
+    }
+
+    .features h2 {
+      text-align: center;
+      font-size: 2.5rem;
+      margin-bottom: 40px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+
+    .feature-card {
+      background: #f9fafb;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      text-decoration: none;
+      color: #333;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .feature-card i {
+      color: #4a90e2;
+      margin-bottom: 15px;
+    }
+
+    .feature-card h3 {
+      font-size: 1.5rem;
+      margin-bottom: 10px;
+    }
+
+    .feature-card p {
+      color: #666;
+    }
+
+    /* Applications Section */
+    .applications {
+      padding: 60px 0;
+      background: #f9fafb;
+    }
+
+    .applications h2 {
+      text-align: center;
+      font-size: 2.5rem;
+      margin-bottom: 40px;
+    }
+
+    .applications-container {
+      overflow: hidden;
+      position: relative;
+      width: 100%;
+    }
+
+    .applications-scroller {
+      display: flex;
+      white-space: normal;
+      animation: scroll 20s linear infinite;
+    }
+
+    .application-card {
+      flex: 0 0 auto;
+      width: 250px;
+      background: #fff;
+      padding: 20px;
+      margin-right: 20px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      text-decoration: none;
+      color: #333;
+      transition: transform 0.3s;
+    }
+
+    .application-card:hover {
+      transform: translateY(-5px);
+    }
+
+    .application-card img {
+      width: 100%;
+      height: 150px;
+      object-fit: scale-down;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+
+    .application-card i {
+      color: #4a90e2;
+      font-size: 2rem;
+      margin-bottom: 15px;
+    }
+
+    .application-card h3 {
+      font-size: smaller;
+      margin-bottom: 10px;
+    }
+
+    .application-card p {
+      color: #666;
+      font-size: smaller;
+    }
+
+    @keyframes scroll {
+      0% {
+        transform: translateX(0);
+      }
+      100% {
+        transform: translateX(-50%);
+      }
+    }
+
+    /* Pause animation on hover */
+    .applications-container:hover .applications-scroller {
+      animation-play-state: paused;
+    }
+
+    /* Testimonials Section */
+    .testimonials {
+      padding: 60px 0;
+      background: #f9fafb;
+    }
+
+    .testimonials h2 {
+      text-align: center;
+      font-size: 2.5rem;
+      margin-bottom: 40px;
+    }
+
+    .testimonial-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .testimonial-card {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .testimonial-card p {
+      font-style: italic;
+      margin-bottom: 15px;
+    }
+
+    .testimonial-card h4 {
+      font-size: 1.2rem;
+      margin-bottom: 5px;
+    }
+
+    .testimonial-card span {
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    /* CTA Section */
+    .cta-section {
+      background: #4a90e2;
+      color: #fff;
+      padding: 40px 0;
+      text-align: center;
+    }
+
+    .cta-section h2 {
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+
+    .cta-section p {
+      margin-bottom: 20px;
+    }
+
+    /* Footer */
+    .footer {
+      background: #333;
+      color: #fff;
+      padding: 40px 0;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+    }
+
+    .footer-logo .logo {
+      height: 40px;
+      margin-bottom: 10px;
+    }
+
+    .footer-logo p {
+      color: #ccc;
+    }
+
+    .footer-links h4, .footer-contact h4 {
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+    }
+
+    .footer-links ul {
+      list-style: none;
+    }
+
+    .footer-links li {
+      margin-bottom: 5px;
+    }
+
+    .footer-links a, .footer-contact a {
+      color: #ccc;
+      text-decoration: none;
+    }
+
+    .footer-links a:hover, .footer-contact a:hover {
+      color: #4a90e2;
+    }
+
+    .social-icons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: nowrap;
+      justify-content: space-evenly;
+    }
+
+    .social-icons a {
+      color: #fff;
+      font-size: 1.5rem;
+    }
+
+    .social-icons a:hover {
+      color: #4a90e2;
+    }
+
+    .footer-bottom {
+      text-align: center;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #444;
+    }
+
+    /* Notes Modal */
+    .notes-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+    }
+
+    .notes-content {
+      background: #fff;
+      width: 90%;
+      max-width: 500px;
+      margin: 100px auto;
+      padding: 20px;
+      border-radius: 10px;
+      position: relative;
+    }
+
+    .close-notes {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    .notes-content h3 {
+      margin-bottom: 15px;
+    }
+
+    #notesTextarea {
+      width: 100%;
+      height: 200px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      resize: vertical;
+    }
+
+    #saveNotes {
+      margin-top: 10px;
+      width: 100%;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .header .container {
+        flex-wrap: wrap;
+      }
+
+      .nav-menu {
+        display: none;
+        flex-direction: column;
+        width: 100%;
+        background: #fff;
+        position: absolute;
+        top: 70px;
+        left: 0;
+        padding: 20px;
+        box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      .nav-menu.active {
+        display: flex;
+      }
+
+      .nav-link {
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+      }
+
+      .hamburger {
+        display: block;
+      }
+
+      .hero .container {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .hero-image {
+        margin-top: 20px;
+      }
+
+      .feature-grid, .testimonial-grid, .applications-scroller {
+        grid-template-columns: 1fr;
+      }
+
+      .applications-scroller {
+        animation: none; /* Disable animation on mobile for better performance */
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+      }
+
+      .application-card {
+        width: 100%;
+        margin-right: 0;
+      }
+
+      .application-card img {
+        height: 120px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="logo-section">
+        <a href="/">
+          <img src="/images/logo.jpg" alt="BookHive Logo" class="logo">
+        </a>
+      </div>
+      <nav class="nav-menu">
+        <% if (user) { %>
+          <a href="/applications" class="nav-link"><i class="fas fa-th"></i> Applications</a>
+          <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
+          <a href="/publications" class="nav-link"><i class="fas fa-book-open"></i> Publications</a>
+          <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
+          <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
+          <!-- <a href="/account" class="nav-link"><i class="fas fa-user"></i> Account</a> -->
+          <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        <% } else { %>
+          <a href="/login" class="nav-link"><i class="fas fa-sign-in-alt"></i> Login</a>
+          <a href="/signup" class="nav-link btn-nav-signup"><i class="fas fa-user-plus"></i> Sign Up</a>
+        <% } %>
+      </nav>
+      <div class="hamburger">
+        <i class="fas fa-bars"></i>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <h1>Welcome to <span class="highlight">BookHive</span></h1>
+        <p>Your ultimate digital library to upload, organize, share, and read books seamlessly.</p>
+        <div class="cta-buttons">
+          <% if (!user) { %>
+            <a href="/signup" class="btn btn-primary">Get Started Now</a>
+            <a href="/login" class="btn btn-secondary">Login</a>
+          <% } else { %>
+            <a href="/bookhive" class="btn btn-primary">BookHive Library</a>
+          <% } %>
+        </div>
+      </div>
+      <div class="hero-image">
+        <img src="/images/hero-books.png" alt="Digital Library Illustration">
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features" id="features">
+    <div class="container">
+      <h2>Why Choose BookHive?</h2>
+      <div class="feature-grid">
+        <a href="/upload" class="feature-card">
+          <i class="fas fa-file-pdf fa-2x"></i>
+          <h3>PDF Support</h3>
+          <p>Upload and read PDF books effortlessly with our secure platform.</p>
+        </a>
+        <a href="/explore" class="feature-card">
+          <i class="fas fa-share-alt fa-2x"></i>
+          <h3>Share Books</h3>
+          <p>Share your books publicly, privately, or with selected users.</p>
+        </a>
+        <a href="/library" class="feature-card">
+          <i class="fas fa-book-reader fa-2x"></i>
+          <h3>Built-in Reader</h3>
+          <p>Read your books directly in the browser with our integrated PDF viewer.</p>
+        </a>
+        <a href="/pinned" class="feature-card">
+          <i class="fas fa-thumbtack fa-2x"></i>
+          <h3>Pin Favorites</h3>
+          <p>Pin your favorite books for quick access anytime.</p>
+        </a>
+        <a href="/publications" class="feature-card">
+          <i class="fas fa-comment-alt fa-2x"></i>
+          <h3>Community Publications</h3>
+          <p>Engage with the community through posts, likes, and comments.</p>
+        </a>
+        <a href="/news" class="feature-card">
+          <i class="fas fa-bullhorn fa-2x"></i>
+          <h3>Stay Updated</h3>
+          <p>Get the latest news and book updates with BookHive News.</p>
+        </a>
+        <a href="/applications" class="feature-card">
+          <i class="fas fa-cogs fa-2x"></i>
+          <h3>Applications</h3>
+          <p>Explore various applications to enhance your experience.</p>
+        </a>
+        <a p="AI Document Analyzer" class="feature-card">
+          <i class="fas fa-book-open fa-2x"></i>
+          <h3>AI Document Analyzer</h3>
+          <p>AI Support For Easy Understanding Document & Questions With RealTime UseCase.</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Applications Section -->
+  <section class="applications" id="applications">
+    <div class="container">
+      <h2>Explore Our Applications</h2>
+      <% if (applications && applications.length > 0) { %>
+        <div class="applications-container">
+          <div class="applications-scroller">
+            <% applications.forEach(app => { %>
+              <a href="/applications" class="application-card">
+                <img src="<%= app.image || '/images/' + app.id + '.jpeg' %>" alt="<%= app.name %>">
+                <h3><%= app.name %></h3>
+                <p>Enhance your BookHive experience with <%= app.name %>.</p>
+              </a>
+            <% }) %>
+            <!-- Duplicate the cards for seamless scrolling -->
+            <% applications.forEach(app => { %>
+              <a href="/applications/<%= app.id %>" class="application-card">
+                <img src="<%= app.image || '/images/' + app.id + '.jpeg' %>" alt="<%= app.name %>">
+                <h3><%= app.name %></h3>
+                <p>Enhance your BookHive experience with <%= app.name %>.</p>
+              </a>
+            <% }) %>
+          </div>
+        </div>
+      <% } else { %>
+        <p>No applications available at the moment.</p>
+      <% } %>
+    </div>
+  </section>
+
+  <!-- Testimonials Section -->
+  <section class="testimonials" id="testimonials">
+    <div class="container">
+      <h2>What Our Users Say</h2>
+      <div class="testimonial-grid">
+        <div class="testimonial-card">
+          <p>"BookHive has transformed the way I manage my digital books. The built-in reader is fantastic!"</p>
+          <h4>Jane Doe</h4>
+          <span>Book Enthusiast</span>
+        </div>
+        <div class="testimonial-card">
+          <p>"Sharing books with my study group has never been easier. BookHive is a game-changer."</p>
+          <h4>John Smith</h4>
+          <span>Student</span>
+        </div>
+        <div class="testimonial-card">
+          <p>"The community features keep me engaged, and I love discovering new books daily."</p>
+          <h4>Emily Brown</h4>
+          <span>Reader</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Call-to-Action Section -->
+  <section class="cta-section">
+    <div class="container">
+      <h2>Join BookHive Today</h2>
+      <p>Start your journey with a vibrant community of book lovers.</p>
+      <% if (!user) { %>
+        <a href="/signup" class="btn btn-primary">Sign Up Free</a>
+      <% } else { %>
+        <a href="/library" class="btn btn-primary">Go to Your Library</a>
+      <% } %>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-logo">
+          <img src="/images/logo.jpg" alt="BookHive Logo" class="logo">
+          <p>BookHive - Your digital library for seamless book management.</p>
+        </div>
+        <div class="footer-links">
+          <h4>Quick Links</h4>
+          <ul>
+            <li><a href="/news">News</a></li>
+            <li><a href="/publications">Publications</a></li>
+            <li><a href="/explore">Explore</a></li>
+            <li><a href="/library">Library</a></li>
+          </ul>
+        </div>
+        <div class="footer-contact">
+          <h4>Contact Us</h4>
+          <p>Email: <a href="mailto:bookhive.rsd@gmail.com">bookhive.rsd@gmail.com</a></p>
+          <p>Follow us:</p>
+          <div class="social-icons">
+            <a href="https://x.com/meme_v_worlds?t=IZs5crR_GHNulY3rEkGQAg&s=09"><i class="fab fa-twitter"></i></a>
+            <a href="https://www.instagram.com/bookhive.rsd/"><i class="fab fa-instagram"></i></a>
+            <a href="https://www.linkedin.com/in/vijay-kumar-reddy-k02"><i class="fab fa-linkedin"></i></a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>© 2025 BookHive. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Notes Modal -->
+  <% if (user && note !== undefined) { %>
+    <div class="notes-modal" id="notesModal">
+      <div class="notes-content">
+        <span class="close-notes">×</span>
+        <h3>My Notes</h3>
+        <textarea id="notesTextarea" placeholder="Write your notes here..."><%= note %></textarea>
+        <button id="saveNotes" class="btn btn-primary">Save Notes</button>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- JavaScript -->
+  <script>
+    // Hamburger Menu Toggle
+    const hamburger = document.querySelector('.hamburger');
+    const navMenu = document.querySelector('.nav-menu');
+    hamburger.addEventListener('click', () => {
+      navMenu.classList.toggle('active');
+      hamburger.innerHTML = navMenu.classList.contains('active') ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
+    });
+  </script>
+  <% if (user && note !== undefined) { %>
+  <script>
+    // Notes Modal Functionality
+    const notesModal = document.getElementById('notesModal');
+    const notesTextarea = document.getElementById('notesTextarea');
+    const saveNotesBtn = document.getElementById('saveNotes');
+    const closeNotes = document.querySelector('.close-notes');
+
+    // Open notes modal (can be triggered by a button or icon)
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'n') {
+        notesModal.style.display = 'block';
+      }
+    });
+
+    // Close notes modal
+    closeNotes.addEventListener('click', () => {
+      notesModal.style.display = 'none';
+    });
+
+    // Save notes
+    saveNotesBtn.addEventListener('click', () => {
+      fetch('/notes/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: notesTextarea.value })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert('Notes saved successfully!');
+          notesModal.style.display = 'none';
+        } else {
+          alert('Failed to save notes.');
+        }
+      })
+      .catch(err => console.error('Error saving notes:', err));
+    });
+  </script>
+  <% } %>
+  <script>
+    // Socket.IO client-side code
+    window.addEventListener('DOMContentLoaded', function() {
+      if (typeof io === 'function') {
+        const socket = io();
+
+        // Update active users count in real-time
+        socket.on('updateActiveUsers', (count) => {
+          document.getElementById('activeUsers').textContent = count;
+        });
+      }
+    });
+  </script>
+</body>
+</html>

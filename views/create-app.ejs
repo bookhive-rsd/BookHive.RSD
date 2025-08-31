@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="BookHive - Create and Test Applications">
+    <title>BookHive - Create Application</title>
+    <link rel="stylesheet" href="/css/style.css?v=20241024232623">
+    <link rel="stylesheet" href="/css/create-app.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .create-app-container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: 'Poppins', sans-serif;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .form-group input[type="file"] {
+            padding: 3px;
+        }
+        .form-group textarea {
+            height: 300px;
+            resize: vertical;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .btn-secondary {
+            background-color: #2196F3;
+            color: white;
+        }
+        .error-message {
+            color: #ff4444;
+            margin-top: 10px;
+        }
+        .success-message {
+            color: #4CAF50;
+            margin-top: 10px;
+        }
+        .preview-container {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            min-height: 100px;
+        }
+        .image-preview {
+            margin-top: 10px;
+        }
+        .image-preview img {
+            max-width: 100px;
+            max-height: 100px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+        /* Dropdown styles */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-toggle {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #333;
+            text-decoration: none;
+            font-size: 1em;
+            padding: 10px;
+            cursor: pointer;
+        }
+        .dropdown-toggle:hover {
+            color: #4CAF50;
+        }
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            min-width: 160px;
+            z-index: 1000;
+        }
+        .dropdown-menu.active {
+            display: block;
+        }
+        .dropdown-menu a {
+            display: block;
+            padding: 10px 15px;
+            color: #333;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+        .dropdown-menu a:hover {
+            background-color: #f5f5f5;
+            color: #4CAF50;
+        }
+        .dropdown-menu a.active {
+            background-color: #e8f5e9;
+            color: #4CAF50;
+        }
+        @media (max-width: 768px) {
+            .create-app-container {
+                padding: 15px;
+            }
+            .nav-menu.active .dropdown-menu {
+                position: static;
+                border: none;
+                box-shadow: none;
+                background-color: #f5f5f5;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1 class="logo-section">
+                <a href="/">
+                    <img src="/images/logo.jpg" alt="BookHive Logo" class="logo">
+                </a>
+            </h1>
+            <nav class="nav-menu">
+                <% if (user) { %>
+                    <div class="dropdown">
+                        <a href="#" class="dropdown-toggle"><i class="fas fa-th"></i> Apps</a>
+                        <div class="dropdown-menu">
+                            <a href="/applications" class="nav-link <%= currentPage === 'applications' ? 'active' : '' %>"><i class="fas fa-th"></i> Applications</a>
+                            <a href="/create-app" class="nav-link <%= currentPage === 'create-app' ? 'active' : '' %>"><i class="fas fa-plus"></i> Create App</a>
+                        </div>
+                    </div>
+                    <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
+                    <a href="/publications" class="nav-link"><i class="fas fa-book-open"></i> Publications</a>
+                    <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
+                    <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
+                    <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                <% } else { %>
+                    <a href="/login" class="nav-link">Login</a>
+                    <a href="/signup" class="btn btn-primary btn-nav-signup">Sign Up</a>
+                <% } %>
+            </nav>
+        </div>
+    </header>
+
+    <section class="create-app">
+        <div class="container">
+            <div class="create-app-container">
+                <h2>Create New Application</h2>
+                <form id="create-app-form" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="app-name">Application Name</label>
+                        <input type="text" id="app-name" name="app-name" required placeholder="Enter application name">
+                    </div>
+                    <div class="form-group">
+                        <label for="app-description">Description</label>
+                        <textarea id="app-description" name="app-description" placeholder="Enter a brief description"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="app-icon">Application Icon (JPG, JPEG, PNG)</label>
+                        <input type="file" id="app-icon" name="icon" accept="image/jpeg,image/png" onchange="previewImage(event)">
+                        <div class="image-preview" id="image-preview"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="app-code">Application Code (JavaScript)</label>
+                        <textarea id="app-code" name="app-code" required placeholder="// Write your JavaScript code here"></textarea>
+                    </div>
+                    <div class="button-group">
+                        <button type="button" class="btn btn-secondary" id="test-app">Test Application</button>
+                        <button type="submit" class="btn btn-primary">Save Application</button>
+                    </div>
+                    <div id="error-message" class="error-message" style="display: none;"></div>
+                    <div id="success-message" class="success-message" style="display: none;"></div>
+                </form>
+                <div id="preview-container" class="preview-container" style="display: none;">
+                    <h3>Test Preview</h3>
+                    <div id="preview-content"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Dropdown toggle logic
+            const dropdownToggle = document.querySelector('.dropdown-toggle');
+            const dropdownMenu = document.querySelector('.dropdown-menu');
+            if (dropdownToggle && dropdownMenu) {
+                dropdownToggle.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    dropdownMenu.classList.toggle('active');
+                });
+
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!dropdownToggle.contains(e.target) && !dropdownMenu.contains(e.target)) {
+                        dropdownMenu.classList.remove('active');
+                    }
+                });
+            }
+
+            // Hamburger menu logic (if present in style.css)
+            const hamburger = document.querySelector('.hamburger');
+            const navMenu = document.querySelector('.nav-menu');
+            if (hamburger && navMenu) {
+                hamburger.addEventListener('click', () => {
+                    navMenu.classList.toggle('active');
+                    hamburger.innerHTML = navMenu.classList.contains('active') ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
+                });
+            }
+
+            // Preview the selected image
+            function previewImage(event) {
+                const input = event.target;
+                const preview = document.getElementById('image-preview');
+                preview.innerHTML = '';
+
+                if (input.files && input.files[0]) {
+                    const file = input.files[0];
+                    const validTypes = ['image/jpeg', 'image/png'];
+                    if (!validTypes.includes(file.type)) {
+                        document.getElementById('error-message').textContent = 'Please upload a JPG, JPEG, or PNG image.';
+                        document.getElementById('error-message').style.display = 'block';
+                        input.value = '';
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        preview.appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+
+            // Form submission
+            document.getElementById('create-app-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('app-name').value;
+                const description = document.getElementById('app-description').value;
+                const code = document.getElementById('app-code').value;
+                const iconInput = document.getElementById('app-icon');
+                const errorMessage = document.getElementById('error-message');
+                const successMessage = document.getElementById('success-message');
+
+                const formData = new FormData();
+                formData.append('app-name', name);
+                formData.append('app-description', description);
+                formData.append('app-code', code);
+                if (iconInput.files[0]) {
+                    formData.append('icon', iconInput.files[0]);
+                }
+
+                try {
+                    const response = await fetch('/api/applications/create', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        successMessage.textContent = 'Application saved successfully!';
+                        successMessage.style.display = 'block';
+                        errorMessage.style.display = 'none';
+                        document.getElementById('create-app-form').reset();
+                        document.getElementById('image-preview').innerHTML = '';
+                        setTimeout(() => {
+                            window.location.href = '/applications';
+                        }, 1000);
+                    } else {
+                        errorMessage.textContent = result.message || 'Failed to save application';
+                        errorMessage.style.display = 'block';
+                        successMessage.style.display = 'none';
+                    }
+                } catch (err) {
+                    errorMessage.textContent = 'Error saving application';
+                    errorMessage.style.display = 'block';
+                    successMessage.style.display = 'none';
+                    console.error('Error:', err);
+                }
+            });
+
+            // Test application
+            document.getElementById('test-app').addEventListener('click', () => {
+                const code = document.getElementById('app-code').value;
+                const previewContainer = document.getElementById('preview-container');
+                const previewContent = document.getElementById('preview-content');
+
+                previewContainer.style.display = 'block';
+                previewContent.innerHTML = '';
+
+                try {
+                    const script = document.createElement('script');
+                    script.textContent = code;
+                    previewContent.appendChild(script);
+                } catch (err) {
+                    previewContent.innerHTML = '<p style="color: red;">Error running code: ' + err.message + '</p>';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

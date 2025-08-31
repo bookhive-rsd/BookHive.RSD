@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="BookHive - Explore and launch applications.">
+    <title>BookHive - Applications</title>
+    <link rel="stylesheet" href="/css/style.css?v=20241024232623">
+    <link rel="stylesheet" href="/css/chat.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Application Page Styles */
+        .nav-menu {
+            display: flex;
+            gap: 20px;
+        }
+        .app-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .app-block {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .app-block:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+        .app-block h3 {
+            margin: 10px 0 0;
+            font-size: 1.2em;
+            color: #333;
+            font-weight: 500;
+        }
+        .app-icon {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            scrollbar-width: thin;
+            scrollbar-color: #cccccc #f5f5f5;
+        }
+        .modal-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        .modal-content::-webkit-scrollbar-track {
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        .modal-content::-webkit-scrollbar-thumb {
+            background: #cccccc;
+            border-radius: 4px;
+        }
+        .modal-content::-webkit-scrollbar-thumb:hover {
+            background: #aaaaaa;
+        }
+        .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 24px;
+            color: #333;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .modal-close:hover {
+            color: #ff4444;
+        }
+        .modal-header {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            color: #333;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        /* Dropdown styles */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-toggle {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #333;
+            text-decoration: none;
+            font-size: 1em;
+            padding: 10px;
+            cursor: pointer;
+        }
+        .dropdown-toggle:hover {
+            color: #4CAF50;
+        }
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            min-width: 160px;
+            z-index: 1000;
+        }
+        .dropdown-menu.active {
+            display: block;
+        }
+        .dropdown-menu a {
+            display: block;
+            padding: 10px 15px;
+            color: #333;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+        .dropdown-menu a:hover {
+            background-color: #f5f5f5;
+            color: #4CAF50;
+        }
+        .dropdown-menu a.active {
+            background-color: #e8f5e9;
+            color: #4CAF50;
+        }
+        @media (max-width: 768px) {
+            .app-container {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 15px;
+                padding: 15px;
+            }
+            .app-block {
+                padding: 15px;
+            }
+            .app-icon {
+                width: 60px;
+                height: 60px;
+            }
+            .modal-content {
+                width: 95%;
+                padding: 15px;
+            }
+            .nav-menu.active .dropdown-menu {
+                position: static;
+                border: none;
+                box-shadow: none;
+                background-color: #f5f5f5;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <h1 class="logo-section">
+                <a href="/">
+                    <img src="/images/logo.jpg" alt="BookHive Logo" class="logo">
+                </a>
+            </h1>
+            <nav class="nav-menu">
+                <% if (user) { %>
+                    <div class="dropdown">
+                        <a href="#" class="dropdown-toggle"><i class="fas fa-th"></i> Apps</a>
+                        <div class="dropdown-menu">
+                            <a href="/applications" class="nav-link <%= currentPage === 'applications' ? 'active' : '' %>"><i class="fas fa-th"></i> Applications</a>
+                            <a href="/create-app" class="nav-link <%= currentPage === 'create-app' ? 'active' : '' %>"><i class="fas fa-plus"></i> Create App</a>
+                        </div>
+                    </div>
+                    <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
+                    <a href="/publications" class="nav-link"><i class="fas fa-book-open"></i> Publications</a>
+                    <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
+                    <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
+                    <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                <% } else { %>
+                    <a href="/login" class="nav-link">Login</a>
+                    <a href="/signup" class="btn btn-primary btn-nav-signup">Sign Up</a>
+                <% } %>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <h2>Applications</h2>
+            <p>Explore and launch applications or create your own.</p>
+        </div>
+    </section>
+
+    <section class="applications">
+        <div class="container">
+            <div class="app-container">
+                <% if (applications && applications.length > 0) { %>
+                    <% applications.forEach(app => { %>
+                        <div class="app-block" data-app-id="<%= app.id %>">
+                            <img src="<%= app.iconPath %>" alt="<%= app.name %> Icon" class="app-icon" onerror="this.src='/images/default-app-icon.png'">
+                            <h3><%= app.name %></h3>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <div class="empty-state">
+                        <p>No applications available. <a href="/create-app">Create one now!</a></p>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </section>
+
+    <div id="app-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="modal-close">×</span>
+            <div class="modal-header" id="app-title">Loading...</div>
+            <div id="app-content">
+                <!-- Application content will be loaded here by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <% if (user && note) { %>
+        <section class="notes">
+            <div class="container">
+                <h3>Your Notes</h3>
+                <textarea id="note" rows="5" cols="50"><%= note %></textarea>
+            </div>
+        </section>
+    <% } %>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Hamburger menu logic
+            const hamburger = document.querySelector('.hamburger');
+            const navMenu = document.querySelector('.nav-menu');
+            if (hamburger && navMenu) {
+                hamburger.addEventListener('click', () => {
+                    navMenu.classList.toggle('active');
+                    hamburger.innerHTML = navMenu.classList.contains('active') ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
+                });
+            }
+
+            // Dropdown toggle logic
+            const dropdownToggle = document.querySelector('.dropdown-toggle');
+            const dropdownMenu = document.querySelector('.dropdown-menu');
+            if (dropdownToggle && dropdownMenu) {
+                dropdownToggle.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    dropdownMenu.classList.toggle('active');
+                });
+
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!dropdownToggle.contains(e.target) && !dropdownMenu.contains(e.target)) {
+                        dropdownMenu.classList.remove('active');
+                    }
+                });
+            }
+
+            // Application loading logic
+            const loadAppScript = async (appId, appName) => {
+                const modal = document.getElementById('app-modal');
+                const appContent = document.getElementById('app-content');
+                const appTitle = document.getElementById('app-title');
+
+                appContent.innerHTML = '';
+                const existingScripts = document.querySelectorAll('script[src^="/applications/"]');
+                existingScripts.forEach(script => script.remove());
+
+                appTitle.textContent = appName || 'Application';
+                modal.style.display = 'flex';
+
+                const script = document.createElement('script');
+                script.src = `/applications/${appId}/script?t=${new Date().getTime()}`;
+                script.onerror = () => {
+                    appContent.innerHTML = '<p>Error loading application.</p>';
+                    console.error(`Failed to load script for app: ${appId}`);
+                };
+                document.body.appendChild(script);
+            };
+
+            document.querySelectorAll('.app-block').forEach(block => {
+                block.addEventListener('click', () => {
+                    const appId = block.getAttribute('data-app-id');
+                    const appName = block.querySelector('h3').textContent;
+                    loadAppScript(appId, appName);
+                });
+            });
+
+            document.querySelector('.modal-close').addEventListener('click', () => {
+                const modal = document.getElementById('app-modal');
+                const appContent = document.getElementById('app-content');
+                modal.style.display = 'none';
+                appContent.innerHTML = '';
+                const existingScripts = document.querySelectorAll('script[src^="/applications/"]');
+                existingScripts.forEach(script => script.remove());
+            });
+
+            document.getElementById('app-modal').addEventListener('click', (e) => {
+                if (e.target === e.currentTarget) {
+                    const modal = document.getElementById('app-modal');
+                    const appContent = document.getElementById('app-content');
+                    modal.style.display = 'none';
+                    appContent.innerHTML = '';
+                    const existingScripts = document.querySelectorAll('script[src^="/applications/"]');
+                    existingScripts.forEach(script => script.remove());
+                }
+            });
+        });
+    </script>
+</body>
+</html>
