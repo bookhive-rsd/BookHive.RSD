@@ -305,6 +305,84 @@
       opacity: 1;
     }
 
+    /* Translation specific styles */
+    .translation-controls {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 15px;
+      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
+      color: white;
+    }
+
+    .language-selector {
+      background: rgba(255, 255, 255, 0.15);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      border-radius: 8px;
+      padding: 8px 12px;
+      backdrop-filter: blur(10px);
+    }
+
+    .language-selector option {
+      background: #064e3b;
+      color: white;
+    }
+
+    .translate-button {
+      background: rgba(255, 255, 255, 0.2);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .translate-button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+
+    .translate-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .original-text {
+      opacity: 0.8;
+    }
+
+    .translated-text {
+      font-weight: 500;
+      border-left: 3px solid #10b981;
+      padding-left: 8px;
+      margin-top: 8px;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 8px;
+      border-radius: 6px;
+    }
+
+    .translation-indicator {
+      font-size: 0.7rem;
+      color: #10b981;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .loading-translation {
+      animation: pulse 1s infinite;
+    }
+
+    .language-flag {
+      font-size: 1.2em;
+      margin-right: 6px;
+    }
+
     /* Dark mode support */
     .dark .chat-message {
       background: #374151;
@@ -336,6 +414,52 @@
   <main class="container mx-auto mt-8 px-4">
     <h2 class="text-3xl font-bold mb-6 text-center text-blue-600 fade-in">BookHive Community</h2>
     
+    <!-- Translation Controls -->
+    <div class="translation-controls fade-in">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-2">
+          <i class="fas fa-language text-xl"></i>
+          <h3 class="text-lg font-semibold">Translation Settings</h3>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-2">
+            <label class="text-sm font-medium">Translate to:</label>
+            <select id="targetLanguage" class="language-selector">
+              <option value="">Select Language</option>
+              <option value="spanish">🇪🇸 Spanish</option>
+              <option value="french">🇫🇷 French</option>
+              <option value="german">🇩🇪 German</option>
+              <option value="italian">🇮🇹 Italian</option>
+              <option value="portuguese">🇵🇹 Portuguese</option>
+              <option value="russian">🇷🇺 Russian</option>
+              <option value="chinese">🇨🇳 Chinese</option>
+              <option value="japanese">🇯🇵 Japanese</option>
+              <option value="korean">🇰🇷 Korean</option>
+              <option value="arabic">🇸🇦 Arabic</option>
+              <option value="hindi">🇮🇳 Hindi</option>
+              <option value="dutch">🇳🇱 Dutch</option>
+              <option value="swedish">🇸🇪 Swedish</option>
+              <option value="norwegian">🇳🇴 Norwegian</option>
+              <option value="danish">🇩🇰 Danish</option>
+              <option value="finnish">🇫🇮 Finnish</option>
+              <option value="turkish">🇹🇷 Turkish</option>
+              <option value="polish">🇵🇱 Polish</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="autoTranslate" class="rounded">
+            <label for="autoTranslate" class="text-sm">Auto-translate new messages</label>
+          </div>
+          <button id="setDefaultLanguage" class="translate-button">
+            <i class="fas fa-star mr-1"></i> Set as Default
+          </button>
+          <button id="translateAllMessages" class="translate-button">
+            <i class="fas fa-sync mr-1"></i> Translate All
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Enhanced Style Selector -->
     <div class="style-selector fade-in">
       <h3 class="text-lg font-semibold mb-4 text-white flex items-center">
@@ -409,17 +533,24 @@
           <% messages.forEach((message, index) => { %>
             <div class="chat-message message-professional bg-gray-50 p-4 rounded-lg shadow-sm" 
                  data-message-id="<%= message._id %>" 
+                 data-original-text="<%= message.content %>"
                  style="animation-delay: <%= index * 0.1 %>s">
               <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center gap-2">
                   <p class="font-semibold username-professional"><%= message.user.username %></p>
                   <span class="style-badge badge-professional">Professional</span>
                 </div>
-                <span class="message-timestamp text-gray-500">
-                  <%= new Date(message.timestamp).toLocaleString() %>
-                </span>
+                <div class="flex items-center gap-2">
+                  <button class="translate-message-btn text-gray-400 hover:text-green-600 transition" 
+                          data-message-id="<%= message._id %>">
+                    <i class="fas fa-language text-sm"></i>
+                  </button>
+                  <span class="message-timestamp text-gray-500">
+                    <%= new Date(message.timestamp).toLocaleString() %>
+                  </span>
+                </div>
               </div>
-              <p class="text-gray-700 leading-relaxed"><%= message.content %></p>
+              <p class="text-gray-700 leading-relaxed message-content"><%= message.content %></p>
             </div>
           <% }) %>
         </div>
@@ -539,9 +670,14 @@
             <i class="fas fa-user-circle text-blue-600"></i>
             Private Chat with <span id="chatRecipient" class="text-blue-600"></span>
           </h3>
-          <button id="closeChatModal" class="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition">
-            <i class="fas fa-times text-lg"></i>
-          </button>
+          <div class="flex items-center gap-2">
+            <button id="translatePrivateMessages" class="text-gray-400 hover:text-green-600 transition p-2 rounded-full hover:bg-gray-100">
+              <i class="fas fa-language"></i>
+            </button>
+            <button id="closeChatModal" class="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition">
+              <i class="fas fa-times text-lg"></i>
+            </button>
+          </div>
         </div>
         <div id="privateChatMessages" class="flex-1 overflow-y-auto space-y-4 mb-4 p-2">
           <!-- Private messages will be populated dynamically -->
@@ -580,6 +716,37 @@
     let currentStyle = 'professional';
     let isTyping = false;
     let typingTimeout;
+    
+    // Translation configuration
+    const GEMINI_API_KEY = 'AIzaSyBcnPIGkKdkSpoJaPv3W3mw3uV7c9pH2QI';
+    const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+    
+    // Translation state
+    let userLanguage = localStorage.getItem('bookhive_user_language') || '';
+    let autoTranslateEnabled = localStorage.getItem('bookhive_auto_translate') === 'true';
+    let translationCache = new Map();
+    
+    // Language mappings
+    const languageNames = {
+      'spanish': 'Spanish',
+      'french': 'French', 
+      'german': 'German',
+      'italian': 'Italian',
+      'portuguese': 'Portuguese',
+      'russian': 'Russian',
+      'chinese': 'Chinese (Simplified)',
+      'japanese': 'Japanese',
+      'korean': 'Korean',
+      'arabic': 'Arabic',
+      'hindi': 'Hindi',
+      'dutch': 'Dutch',
+      'swedish': 'Swedish',
+      'norwegian': 'Norwegian',
+      'danish': 'Danish',
+      'finnish': 'Finnish',
+      'turkish': 'Turkish',
+      'polish': 'Polish'
+    };
 
     // Style configurations with enhanced conversion
     const styles = {
@@ -626,6 +793,247 @@
         color: '#dc2626'
       }
     };
+
+    // Translation Functions
+    async function translateText(text, targetLanguage) {
+      // Check cache first
+      const cacheKey = `${text}|${targetLanguage}`;
+      if (translationCache.has(cacheKey)) {
+        return translationCache.get(cacheKey);
+      }
+
+      try {
+        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `Translate the following text to ${languageNames[targetLanguage] || targetLanguage}. Only return the translated text without any additional comments or explanations:\n\n${text}`
+              }]
+            }]
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Translation API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const translatedText = data.candidates[0]?.content?.parts[0]?.text?.trim();
+        
+        if (translatedText) {
+          // Cache the translation
+          translationCache.set(cacheKey, translatedText);
+          return translatedText;
+        } else {
+          throw new Error('No translation received');
+        }
+      } catch (error) {
+        console.error('Translation error:', error);
+        return null;
+      }
+    }
+
+    async function translateMessage(messageElement, targetLanguage) {
+      const originalText = messageElement.dataset.originalText || messageElement.querySelector('.message-content').textContent;
+      const contentElement = messageElement.querySelector('.message-content');
+      
+      // Show loading state
+      const loadingIndicator = document.createElement('div');
+      loadingIndicator.className = 'translation-indicator loading-translation';
+      loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Translating...';
+      messageElement.appendChild(loadingIndicator);
+      
+      try {
+        const translatedText = await translateText(originalText, targetLanguage);
+        
+        if (translatedText) {
+          const isReplaceMode = !!localStorage.getItem('bookhive_default_language');
+          const indicator = document.createElement('div');
+          indicator.className = 'translation-indicator';
+          indicator.innerHTML = `<i class="fas fa-language"></i> Translated to ${languageNames[targetLanguage] || targetLanguage}`;
+
+          if (isReplaceMode) {
+            contentElement.textContent = translatedText;
+            contentElement.parentNode.insertBefore(indicator, contentElement.nextSibling);
+          } else {
+            contentElement.classList.add('original-text');
+            const translatedDiv = document.createElement('div');
+            translatedDiv.className = 'translated-text';
+            translatedDiv.textContent = translatedText;
+            contentElement.parentNode.insertBefore(translatedDiv, contentElement.nextSibling);
+            translatedDiv.appendChild(indicator);
+          }
+          
+          messageElement.dataset.translated = 'true';
+          messageElement.dataset.translatedTo = targetLanguage;
+        }
+      } catch (error) {
+        console.error('Translation failed:', error);
+        showNotification('Translation failed. Please try again.', 'error');
+      } finally {
+        loadingIndicator.remove();
+      }
+    }
+
+    async function translateAllVisibleMessages() {
+      if (!userLanguage) {
+        showNotification('Please select a target language first.', 'warning');
+        return;
+      }
+
+      const messages = document.querySelectorAll('#publicChatMessages .chat-message[data-translated!="true"]');
+      const translateBtn = document.getElementById('translateAllMessages');
+      
+      translateBtn.disabled = true;
+      translateBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Translating...';
+      
+      for (const message of messages) {
+        await translateMessage(message, userLanguage);
+        // Small delay to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      translateBtn.disabled = false;
+      translateBtn.innerHTML = '<i class="fas fa-sync mr-1"></i> Translate All';
+      
+      showNotification('All messages translated successfully!', 'success');
+    }
+
+    async function translateAllPrivateMessages() {
+      if (!userLanguage) {
+        showNotification('Please select a target language first.', 'warning');
+        return;
+      }
+      
+      const privateMessages = document.querySelectorAll('#privateChatMessages .chat-message[data-translated!="true"]');
+      const btn = document.getElementById('translatePrivateMessages');
+      
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      
+      for (const message of privateMessages) {
+        const messageContent = message.querySelector('.message-content');
+        if (messageContent) {
+          message.dataset.originalText = messageContent.textContent;
+          await translateMessage(message, userLanguage);
+        }
+        // Small delay to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-language"></i>';
+      
+      showNotification('All private messages translated successfully!', 'success');
+    }
+
+    function showNotification(message, type = 'info') {
+      const notification = document.createElement('div');
+      const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+      };
+      
+      notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2`;
+      notification.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'exclamation-triangle' : type === 'warning' ? 'exclamation' : 'info'}-circle"></i>
+        <span>${message}</span>
+        <button onclick="this.parentElement.remove()" class="ml-2 text-white hover:text-gray-200">
+          <i class="fas fa-times"></i>
+        </button>
+      `;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification);
+        }
+      }, 5000);
+    }
+
+    // Initialize translation settings
+    function initializeTranslation() {
+      const targetLanguageSelect = document.getElementById('targetLanguage');
+      const autoTranslateCheckbox = document.getElementById('autoTranslate');
+      
+      // Set saved preferences
+      if (userLanguage) {
+        targetLanguageSelect.value = userLanguage;
+      }
+      autoTranslateCheckbox.checked = autoTranslateEnabled;
+      
+      // Language selection handler
+      targetLanguageSelect.addEventListener('change', (e) => {
+        userLanguage = e.target.value;
+        localStorage.setItem('bookhive_user_language', userLanguage);
+        
+        if (userLanguage) {
+          showNotification(`Translation language set to ${languageNames[userLanguage]}`, 'success');
+        }
+      });
+      
+      // Auto-translate toggle
+      autoTranslateCheckbox.addEventListener('change', (e) => {
+        autoTranslateEnabled = e.target.checked;
+        localStorage.setItem('bookhive_auto_translate', autoTranslateEnabled);
+        
+        showNotification(
+          autoTranslateEnabled ? 'Auto-translation enabled' : 'Auto-translation disabled',
+          autoTranslateEnabled ? 'success' : 'info'
+        );
+      });
+      
+      // Set default language
+      document.getElementById('setDefaultLanguage').addEventListener('click', () => {
+        if (userLanguage) {
+          localStorage.setItem('bookhive_default_language', userLanguage);
+          showNotification(`${languageNames[userLanguage]} set as default language`, 'success');
+        } else {
+          showNotification('Please select a language first', 'warning');
+        }
+      });
+      
+      // Translate all messages
+      document.getElementById('translateAllMessages').addEventListener('click', translateAllVisibleMessages);
+      
+      // Individual message translation buttons
+      document.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('translate-message-btn') || e.target.parentElement.classList.contains('translate-message-btn')) {
+          const btn = e.target.classList.contains('translate-message-btn') ? e.target : e.target.parentElement;
+          const messageElement = btn.closest('.chat-message');
+          
+          if (!userLanguage) {
+            showNotification('Please select a target language first.', 'warning');
+            return;
+          }
+          
+          if (messageElement.dataset.translated === 'true') {
+            // Toggle back to original
+            const content = messageElement.querySelector('.message-content');
+            content.textContent = messageElement.dataset.originalText;
+            const indicator = messageElement.querySelector('.translation-indicator');
+            if (indicator) indicator.remove();
+            const translatedDiv = messageElement.querySelector('.translated-text');
+            if (translatedDiv) translatedDiv.remove();
+            content.classList.remove('original-text');
+            messageElement.dataset.translated = 'false';
+            btn.innerHTML = '<i class="fas fa-language text-sm"></i>';
+          } else {
+            await translateMessage(messageElement, userLanguage);
+            btn.innerHTML = '<i class="fas fa-language text-sm text-green-600"></i>';
+          }
+        }
+      });
+      
+      // Private chat translation
+      document.getElementById('translatePrivateMessages').addEventListener('click', translateAllPrivateMessages);
+    }
 
     // Enhanced message styling function
     function convertToStyle(message, style) {
@@ -692,10 +1100,24 @@
         appendPublicMessage(message);
       });
       scrollToBottom('publicChatMessages');
+      if (autoTranslateEnabled && userLanguage) {
+        translateAllVisibleMessages();
+      }
     });
 
-    socket.on('chatMessage', (message) => {
+    socket.on('chatMessage', async (message) => {
       appendPublicMessage(message);
+      
+      // Auto-translate if enabled and user has set a language
+      if (autoTranslateEnabled && userLanguage) {
+        const messageElement = document.querySelector(`#publicChatMessages .chat-message:last-child`);
+        if (messageElement) {
+          setTimeout(async () => {
+            await translateMessage(messageElement, userLanguage);
+          }, 500);
+        }
+      }
+      
       scrollToBottom('publicChatMessages');
     });
 
@@ -749,7 +1171,7 @@
     });
 
     socket.on('requestPrivateChatResponse', (data) => {
-      alert(data.message);
+      showNotification(data.message, data.success ? 'success' : 'error');
       if (data.success) {
         document.getElementById('privateChatRequestForm').classList.add('hidden');
         document.getElementById('new-chat-request-btn').classList.remove('hidden');
@@ -757,19 +1179,30 @@
     });
 
     socket.on('handleChatRequestResponse', (data) => {
-      alert(data.message);
+      showNotification(data.message, data.success ? 'success' : 'error');
     });
 
     // Handle private chat messages
-    socket.on('privateMessage', (message) => {
+    socket.on('privateMessage', async (message) => {
       if (document.getElementById('privateChatModal').dataset.chatId === message.chatId) {
         appendPrivateMessage(message);
+        
+        // Auto-translate private messages if enabled
+        if (autoTranslateEnabled && userLanguage) {
+          const messageElement = document.querySelector('#privateChatMessages .chat-message:last-child');
+          if (messageElement) {
+            setTimeout(async () => {
+              await translateMessage(messageElement, userLanguage);
+            }, 500);
+          }
+        }
+        
         scrollToBottom('privateChatMessages');
       }
     });
 
     socket.on('privateMessageError', (data) => {
-      alert(data.message);
+      showNotification(data.message, 'error');
     });
 
     socket.on('getPrivateChatMessages', (data) => {
@@ -779,6 +1212,9 @@
         appendPrivateMessage(message);
       });
       scrollToBottom('privateChatMessages');
+      if (autoTranslateEnabled && userLanguage) {
+        translateAllPrivateMessages();
+      }
     });
 
     // Enhanced helper functions
@@ -790,17 +1226,24 @@
       
       messageElement.className = `chat-message ${style.className} bg-gray-50 p-4 rounded-lg shadow-sm`;
       messageElement.dataset.messageId = message._id || Date.now();
+      messageElement.dataset.originalText = message.content;
       messageElement.innerHTML = `
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2">
             <p class="font-semibold ${style.usernameClass}">${message.user.username}</p>
             <span class="style-badge ${style.badgeClass}">${messageStyle}</span>
           </div>
-          <span class="message-timestamp text-gray-500">
-            ${new Date(message.timestamp).toLocaleString()}
-          </span>
+          <div class="flex items-center gap-2">
+            <button class="translate-message-btn text-gray-400 hover:text-green-600 transition" 
+                    data-message-id="${message._id || Date.now()}">
+              <i class="fas fa-language text-sm"></i>
+            </button>
+            <span class="message-timestamp text-gray-500">
+              ${new Date(message.timestamp).toLocaleString()}
+            </span>
+          </div>
         </div>
-        <p class="text-gray-700 leading-relaxed">${message.content}</p>
+        <p class="text-gray-700 leading-relaxed message-content">${message.content}</p>
       `;
       publicChatMessages.appendChild(messageElement);
       
@@ -813,12 +1256,13 @@
       const privateChatMessages = document.getElementById('privateChatMessages');
       const messageElement = document.createElement('div');
       messageElement.className = `chat-message ${isSender ? 'bg-blue-100 text-right ml-8' : 'bg-gray-50 mr-8'} p-4 rounded-lg shadow-sm`;
+      messageElement.dataset.originalText = message.content;
       messageElement.innerHTML = `
         <div class="flex items-center justify-between">
           <p class="font-semibold ${isSender ? 'text-blue-600' : 'text-gray-600'}">${isSender ? 'You' : message.sender.username}</p>
           <span class="text-gray-500 text-sm">${new Date(message.timestamp).toLocaleString()}</span>
         </div>
-        <p class="text-gray-700 mt-2 leading-relaxed">${message.content}</p>
+        <p class="text-gray-700 mt-2 leading-relaxed message-content">${message.content}</p>
       `;
       privateChatMessages.appendChild(messageElement);
     }
@@ -939,15 +1383,7 @@
           previewBox.classList.add('hidden');
         }, 5000);
       } else {
-        // Create a temporary notification
-        const notification = document.createElement('div');
-        notification.className = 'fixed top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
-        notification.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Please type a message to preview';
-        document.body.appendChild(notification);
-        
-        setTimeout(() => {
-          document.body.removeChild(notification);
-        }, 3000);
+        showNotification('Please type a message to preview', 'warning');
       }
     });
 
@@ -1089,12 +1525,51 @@
       e.target.style.boxShadow = '';
     });
 
-    // Initialize default style
-    const defaultStyle = styles[currentStyle];
-    document.getElementById('publicMessageInput').placeholder = defaultStyle.placeholder;
-    document.getElementById('currentStyle').textContent = 'Professional';
+    // Enhanced error handling
+    socket.on('error', (error) => {
+      console.error('Socket error:', error);
+      showNotification('Connection issue. Please refresh the page.', 'error');
+    });
 
-    // Add smooth scrolling for long conversations
+    // Initialize all features
+    document.addEventListener('DOMContentLoaded', () => {
+      // Initialize translation system
+      initializeTranslation();
+      
+      // Initialize default style
+      const defaultStyle = styles[currentStyle];
+      document.getElementById('publicMessageInput').placeholder = defaultStyle.placeholder;
+      document.getElementById('currentStyle').textContent = 'Professional';
+      
+      // Load default language if set
+      const defaultLanguage = localStorage.getItem('bookhive_default_language');
+      if (defaultLanguage && !userLanguage) {
+        document.getElementById('targetLanguage').value = defaultLanguage;
+        userLanguage = defaultLanguage;
+        showNotification(`Default language (${languageNames[defaultLanguage]}) loaded`, 'info');
+      }
+
+      // Auto-translate public messages on load if enabled
+      if (autoTranslateEnabled && userLanguage) {
+        translateAllVisibleMessages();
+      }
+      
+      // Add loading animation to buttons
+      document.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', function() {
+          if (!this.classList.contains('loading') && !this.disabled) {
+            this.classList.add('loading');
+            setTimeout(() => {
+              this.classList.remove('loading');
+            }, 1000);
+          }
+        });
+      });
+      
+      console.log('BookHive Community Chat with Translation initialized!');
+    });
+
+    // Utility functions for better UX
     function smoothScrollToBottom(elementId) {
       const element = document.getElementById(elementId);
       element.scrollTo({
@@ -1103,44 +1578,43 @@
       });
     }
 
-    // Enhanced error handling
-    socket.on('error', (error) => {
-      console.error('Socket error:', error);
-      
-      const errorNotification = document.createElement('div');
-      errorNotification.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
-      errorNotification.innerHTML = `
-        <i class="fas fa-exclamation-circle"></i>
-        <span>Connection issue. Please refresh the page.</span>
-        <button onclick="this.parentElement.remove()" class="ml-2 text-white hover:text-gray-200">
-          <i class="fas fa-times"></i>
-        </button>
-      `;
-      document.body.appendChild(errorNotification);
-      
-      setTimeout(() => {
-        if (document.body.contains(errorNotification)) {
-          document.body.removeChild(errorNotification);
-        }
-      }, 5000);
-    });
-
-    // Initialize UI enhancements
-    document.addEventListener('DOMContentLoaded', () => {
-      // Add loading animation to buttons
-      document.querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('click', function() {
-          if (!this.classList.contains('loading')) {
-            this.classList.add('loading');
-            setTimeout(() => {
-              this.classList.remove('loading');
-            }, 1000);
-          }
+    // Clear translation cache periodically to prevent memory issues
+    setInterval(() => {
+      if (translationCache.size > 1000) {
+        const entries = Array.from(translationCache.entries());
+        const half = Math.floor(entries.length / 2);
+        translationCache.clear();
+        // Keep most recent translations
+        entries.slice(half).forEach(([key, value]) => {
+          translationCache.set(key, value);
         });
-      });
+        console.log('Translation cache cleared and optimized');
+      }
+    }, 300000); // Clean every 5 minutes
+
+    // Handle page visibility for better performance
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        // Pause auto-translation when tab is not visible
+        autoTranslateEnabled = false;
+      } else {
+        // Resume auto-translation based on user preference
+        autoTranslateEnabled = localStorage.getItem('bookhive_auto_translate') === 'true';
+      }
     });
 
-    console.log('BookHive Community Chat initialized with enhanced styling system!');
+    // Export functions for debugging (development only)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      window.bookHiveDebug = {
+        translateText,
+        translateMessage,
+        translationCache,
+        showNotification,
+        userLanguage,
+        autoTranslateEnabled
+      };
+      console.log('Debug functions available in window.bookHiveDebug');
+    }
   </script>
 </body>
 </html>
