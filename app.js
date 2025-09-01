@@ -2607,8 +2607,11 @@ app.post('/api/applications/create', isAuthenticated, ApplicationImageUpload.sin
 
     // Generate unique file name for script
     const appId = Date.now().toString();
-    const scriptPath = path.join(__dirname, 'user-applications', 'scripts', `user-app-${appId}.js`);
-    const metadataPath = path.join(__dirname, 'user-applications', 'metadata', `user-app-${appId}.json`);
+    // const scriptPath = path.join(__dirname, 'user-applications', 'scripts', `user-app-${appId}.js`);
+    // const metadataPath = path.join(__dirname, 'user-applications', 'metadata', `user-app-${appId}.json`);
+
+    const scriptPath = path.join(__dirname, 'opt', 'render', 'project', 'src', 'user-applications', 'scripts', `user-app-${appId}.js`);
+    const metadataPath = path.join(__dirname, 'opt', 'render', 'project', 'src','user-applications', 'metadata', `user-app-${appId}.json`);
 
     // Save script to file
     await fs.writeFile(scriptPath, code);
