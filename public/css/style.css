@@ -927,6 +927,7 @@ body {
 }
 
 header {
+  background: url('/images/background-image.jpeg') center/cover no-repeat;
   background-color: var(--white);
   box-shadow: var(--shadow);
   padding: 1rem 0;
