@@ -612,16 +612,15 @@
     </div>
   </section>
 
-<!-- Applications Section -->
 <section class="applications" id="applications">
-  <div class="container">
-    <h2>Explore Our Applications</h2>
+  <div class="container mx-auto mt-8 px-4">
+    <h2 class="text-3xl font-bold mb-6 text-center">Explore Our Applications</h2>
     <% if (applications && applications.length > 0) { %>
       <div class="applications-container">
         <div class="applications-scroller">
           <% applications.forEach(app => { %>
-            <a href="/applications/<%= app.id %>" class="application-card">
-              <img src="<%= app.iconPath || '/images/default-app-icon.png' %>" alt="<%= app.name %>">
+            <a href="/applications/<%= app.id %>" class="application-card" aria-label="Open <%= app.name %> application">
+              <img src="<%= app.iconPath %>" alt="<%= app.name %> Icon" class="app-icon" onerror="this.src='/images/logo-removebg-preview.png';">
               <h3><%= app.name %></h3>
               <p>Enhance your BookHive experience with <%= app.name %>.</p>
             </a>
@@ -629,7 +628,7 @@
         </div>
       </div>
     <% } else { %>
-      <p>No applications available at the moment.</p>
+      <p class="text-center text-gray-600">No applications available at the moment.</p>
     <% } %>
   </div>
 </section>

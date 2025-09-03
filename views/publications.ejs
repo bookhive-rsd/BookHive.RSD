@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
   <style>
-    /* Ensure Quill-generated lists render correctly */
+    /* Ensure Quill-generated content renders correctly */
     .publication-content ol, .publication-content ul {
       list-style-type: decimal; /* For ordered lists */
       padding-left: 1.5rem;
@@ -26,6 +26,24 @@
     .publication-content p {
       margin-bottom: 1rem;
     }
+    .publication-content a {
+      color: #1d4ed8;
+      text-decoration: underline;
+    }
+    .publication-content a:hover {
+      color: #1e40af;
+    }
+    .publication-content span[style] {
+      /* Ensure inline styles from Quill (e.g., color, font-size) are respected */
+      display: inline;
+    }
+    /* Ensure images are responsive */
+    .publication-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+    }
   </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -38,14 +56,14 @@
         </a>
       </div>
       <nav class="nav-menu">
-          <a href="/applications" class="nav-link"><i class="fas fa-th"></i> Applications</a>
-          <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
-          <a href="/publications" class="nav-link active"><i class="fas fa-book-open"></i> Publications</a>
-          <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
-          <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
-          <!-- <a href="/account" class="nav-link"><i class="fas fa-user"></i> Account</a> -->
-          <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        <a href="/applications" class="nav-link"><i class="fas fa-th"></i> Applications</a>
+        <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
+        <a href="/publications" class="nav-link active"><i class="fas fa-book-open"></i> Publications</a>
+        <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
+        <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
+        <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
       </nav>
+    </div>
   </header>
 
   <!-- Main Content -->
@@ -84,7 +102,7 @@
           </div>
           <div class="publication-content mb-4"><%- publication.content %></div>
           <% if (publication.image) { %>
-            <img src="/publication-image/<%= publication._id %>" alt="Publication Image" class="max-w-full h-auto rounded-lg mb-4">
+            <img src="/publication-image/<%= publication._id %>" alt="Publication Image" class="max-w-full h-auto rounded-lg mb-4" onerror="this.src='/images/default-publication-image.png';">
           <% } %>
           <div class="flex items-center space-x-4 mb-4">
             <button class="like-button flex items-center text-blue-600 hover:text-blue-800" data-publication-id="<%= publication._id %>" data-liked="<%= user && publication.likes.includes(user._id) ? 'true' : 'false' %>">
