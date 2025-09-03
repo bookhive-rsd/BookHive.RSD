@@ -612,35 +612,27 @@
     </div>
   </section>
 
-  <!-- Applications Section -->
-  <section class="applications" id="applications">
-    <div class="container">
-      <h2>Explore Our Applications</h2>
-      <% if (applications && applications.length > 0) { %>
-        <div class="applications-container">
-          <div class="applications-scroller">
-            <% applications.forEach(app => { %>
-              <a href="/applications" class="application-card">
-                <img src="<%= app.image || '/images/' + app.id + '.jpeg' %>" alt="<%= app.name %>">
-                <h3><%= app.name %></h3>
-                <p>Enhance your BookHive experience with <%= app.name %>.</p>
-              </a>
-            <% }) %>
-            <!-- Duplicate the cards for seamless scrolling -->
-            <% applications.forEach(app => { %>
-              <a href="/applications/<%= app.id %>" class="application-card">
-                <img src="<%= app.image || '/images/' + app.id + '.jpeg' %>" alt="<%= app.name %>">
-                <h3><%= app.name %></h3>
-                <p>Enhance your BookHive experience with <%= app.name %>.</p>
-              </a>
-            <% }) %>
-          </div>
+<!-- Applications Section -->
+<section class="applications" id="applications">
+  <div class="container">
+    <h2>Explore Our Applications</h2>
+    <% if (applications && applications.length > 0) { %>
+      <div class="applications-container">
+        <div class="applications-scroller">
+          <% applications.forEach(app => { %>
+            <a href="/applications/<%= app.id %>" class="application-card">
+              <img src="<%= app.iconPath || '/images/default-app-icon.png' %>" alt="<%= app.name %>">
+              <h3><%= app.name %></h3>
+              <p>Enhance your BookHive experience with <%= app.name %>.</p>
+            </a>
+          <% }) %>
         </div>
-      <% } else { %>
-        <p>No applications available at the moment.</p>
-      <% } %>
-    </div>
-  </section>
+      </div>
+    <% } else { %>
+      <p>No applications available at the moment.</p>
+    <% } %>
+  </div>
+</section>
 
   <!-- Testimonials Section -->
   <section class="testimonials" id="testimonials">
