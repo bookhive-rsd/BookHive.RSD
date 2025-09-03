@@ -780,14 +780,22 @@ app.get('/', async (req, res) => {
     const totalUsers = await User.countDocuments();
     const appDir = path.join(__dirname, 'applications');
     const appFiles = await fs.readdir(appDir);
-    const applications = appFiles
-      .filter(file => file.endsWith('.js'))
+    const staticApps = appFiles
       .map(file => ({
         name: path.basename(file, '.js').replace(/-/g, ' ').toUpperCase(),
-        id: path.basename(file, '.js')
+        id: path.basename(file, '.js'),
+        iconPath: '/images/default-app-icon.png' // Default icon for static apps
       }));
-    res.render('index', { 
-      user: req.user, 
+    const userApps = await Application.find({}).select('name _id iconPath');
+    const applications = [
+      ...userApps.map(app => ({
+        id: app._id.toString(),
+        name: app.name,
+        iconPath: app.iconPath
+      }))
+    ];
+    res.render('index', {
+      user: req.user,
       note: req.note ? req.note.content : '',
       totalUsers,
       activeUsers: activeUsers.size,
@@ -795,11 +803,11 @@ app.get('/', async (req, res) => {
     });
   } catch (err) {
     console.error('Index route error:', err);
-    res.status(500).render('error', { 
-      message: 'Failed to load home page', 
-      user: req.user, 
+    res.status(500).render('error', {
+      message: 'Failed to load home page',
+      user: req.user,
       note: req.note ? req.note.content : '',
-      applications: [] // Fallback to empty array to prevent errors in error page
+      applications: []
     });
   }
 });
