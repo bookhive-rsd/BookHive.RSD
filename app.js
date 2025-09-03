@@ -2605,13 +2605,17 @@ app.post('/api/applications/create', isAuthenticated, ApplicationImageUpload.sin
       return res.status(400).json({ success: false, message: 'Application name and code are required.' });
     }
 
+    const scriptsDir = path.join(__dirname, 'user-applications', 'scripts');
+    const metadataDir = path.join(__dirname, 'user-applications', 'metadata');
+
+    // Create directories if they don't exist
+    await fs.mkdir(scriptsDir, { recursive: true });
+    await fs.mkdir(metadataDir, { recursive: true });
+
     // Generate unique file name for script
     const appId = Date.now().toString();
-    const scriptPath = path.join(__dirname, 'user-applications', 'scripts', `user-app-${appId}.js`);
-    const metadataPath = path.join(__dirname, 'user-applications', 'metadata', `user-app-${appId}.json`);
-
-    // const scriptPath = path.join(__dirname, 'opt', 'render', 'project', 'src', 'user-applications', 'scripts', `user-app-${appId}.js`);
-    // const metadataPath = path.join(__dirname, 'opt', 'render', 'project', 'src','user-applications', 'metadata', `user-app-${appId}.json`);
+    const scriptPath = path.join(scriptsDir, `user-app-${appId}.js`);
+    const metadataPath = path.join(metadataDir, `user-app-${appId}.json`);
 
     // Save script to file
     await fs.writeFile(scriptPath, code);
