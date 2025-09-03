@@ -257,7 +257,8 @@ const publicationSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   likeCount: { type: Number, default: 0 },
-  image: { type: String }
+  image: { type: Buffer },  // Changed from String to Buffer
+  imageType: { type: String }  // Added to store MIME type
 });
 
 const commentSchema = new mongoose.Schema({
@@ -309,7 +310,7 @@ const publicationStorage = multer.diskStorage({
 });
 
 const publicationUpload = multer({
-  storage: publicationStorage,
+  storage: multer.memoryStorage(),  // Changed to memoryStorage
   fileFilter: (req, file, cb) => {
     if (!file.mimetype.startsWith('image/')) {
       return cb(new Error('Only image files are allowed!'), false);
@@ -486,7 +487,7 @@ const storage = multer.diskStorage({
 });
 
 const ApplicationImageUpload = multer({
-  storage,
+  storage: multer.memoryStorage(),  // Changed to memoryStorage
   fileFilter: (req, file, cb) => {
     const filetypes = /jpeg|jpg|png/;
     const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
@@ -2100,6 +2101,7 @@ app.get('/publications', isAuthenticated, async (req, res) => {
   }
 });
 
+// Update the /publication post route to store image as Buffer
 app.post('/publication', isAuthenticated, publicationUpload.single('image'), async (req, res) => {
   try {
     const user = req.user;
@@ -2129,7 +2131,8 @@ app.post('/publication', isAuthenticated, publicationUpload.single('image'), asy
     const publication = new Publication({
       content: sanitizedContent,
       postedBy: user._id,
-      image: req.file ? `/images/publications/${req.file.filename}` : null
+      image: req.file ? req.file.buffer : null,  // Store as Buffer
+      imageType: req.file ? req.file.mimetype : null  // Store MIME type
     });
     await publication.save();
     const populatedPublication = await Publication.findById(publication._id).populate('postedBy', 'username');
@@ -2141,13 +2144,18 @@ app.post('/publication', isAuthenticated, publicationUpload.single('image'), asy
   }
 });
 
+// Update the publication image serving route to send Buffer instead of file
 app.get('/publication-image/:publicationId', async (req, res) => {
   try {
     const publication = await Publication.findById(req.params.publicationId);
     if (!publication || !publication.image) {
       return res.status(404).send('Image not found');
     }
-    res.sendFile(path.join(__dirname, 'public', publication.image));
+    res.set({
+      'Content-Type': publication.imageType || 'image/jpeg',
+      'Content-Disposition': `inline; filename="publication-${publication._id}.jpg"`
+    });
+    res.send(publication.image);  // Send Buffer
   } catch (err) {
     console.error('Error serving publication image:', err);
     res.status(500).send('Server error');
@@ -2323,14 +2331,11 @@ app.get('/applications/:appId', isAuthenticated, async (req, res) => {
       });
     }
     const appId = req.params.appId;
-
-    // Check if appId corresponds to a static application
     let appPath = path.join(__dirname, 'applications', `${appId}.js`);
     let isStaticApp = true;
     try {
       await fs.access(appPath);
     } catch {
-      // If not a static app, check user-created apps
       isStaticApp = false;
       const userApp = await Application.findById(appId);
       if (!userApp) {
@@ -2340,20 +2345,24 @@ app.get('/applications/:appId', isAuthenticated, async (req, res) => {
           note: req.note ? req.note.content : ''
         });
       }
-      appPath = userApp.filePath; // Use the stored filePath from MongoDB
+      appPath = userApp.filePath;
     }
-
-    // Fetch application name for display
     let appName = isStaticApp
       ? appId.replace(/-/g, ' ').toUpperCase()
       : (await Application.findById(appId))?.name || 'User Application';
-
+    const applications = await Application.find({}).select('name _id').lean();
+    console.log('Rendering app:', { appId, appName });
     res.render('application', {
-      applications: [], // Empty list for specific app view
+      applications: applications.map(app => ({
+        id: app._id.toString(),
+        name: app.name,
+        iconPath: `/app-icon/${app._id}`
+      })),
       appId,
-      appName, // Pass the application name for display
+      appName,
       user,
-      note: req.note ? req.note.content : ''
+      note: req.note ? req.note.content : '',
+      currentPage: 'applications'
     });
   } catch (err) {
     console.error('Application load error:', err);
@@ -2507,6 +2516,7 @@ app.get('/private-chat/:chatId', isAuthenticated, async (req, res) => {
   }
 });
 
+// Update sendDailyPublicationEmails to use Buffer for attachments
 async function sendDailyPublicationEmails() {
   try {
     const today = new Date();
@@ -2523,20 +2533,12 @@ async function sendDailyPublicationEmails() {
       console.log('No new publications today');
       return;
     }
-
     const users = await User.find({ isAdmin: false }).select('email username');
     const emailList = users.map(user => user.email);
-
-    const publicationHtml = await Promise.all(publications.map(async (pub, index) => {
+    const publicationHtml = publications.map((pub, index) => {
       let imageTag = '';
       if (pub.image) {
-        const imagePath = path.join(__dirname, 'public', pub.image);
-        try {
-          await fs.access(imagePath);
-          imageTag = `<img src="cid:publication-image-${index}" alt="Publication Image" style="max-width: 300px;">`;
-        } catch (err) {
-          console.error(`Image not found for publication ${pub._id}:`, err);
-        }
+        imageTag = `<img src="cid:publication-image-${index}" alt="Publication Image" style="max-width: 300px;">`;
       }
       return `
         <div>
@@ -2546,27 +2548,19 @@ async function sendDailyPublicationEmails() {
           <p><a href="https://bookhive-rsd.onrender.com/publications">View Post</a></p>
         </div>
       `;
-    }));
-
+    });
     for (const email of emailList) {
-      const attachments = await Promise.all(publications.map(async (pub, index) => {
+      const attachments = publications.map((pub, index) => {
         if (pub.image) {
-          const imagePath = path.join(__dirname, 'public', pub.image);
-          try {
-            const imageData = await fs.readFile(imagePath);
-            return {
-              filename: path.basename(pub.image),
-              path: imagePath,
-              cid: `publication-image-${index}`
-            };
-          } catch (err) {
-            console.error(`Failed to read image for publication ${pub._id}:`, err);
-            return null;
-          }
+          return {
+            filename: `publication-image-${index}.jpg`,  // Arbitrary filename
+            content: pub.image,  // Use Buffer
+            cid: `publication-image-${index}`,
+            contentType: pub.imageType || 'image/jpeg'
+          };
         }
         return null;
-      }));
-
+      }).filter(attachment => attachment !== null);
       const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
@@ -2577,9 +2571,8 @@ async function sendDailyPublicationEmails() {
           <p>Visit <a href="https://bookhive-rsd.onrender.com/publications">Publications</a> to see more.</p>
           <p>Best regards,<br>BookHive Team</p>
         `,
-        attachments: attachments.filter(attachment => attachment !== null)
+        attachments
       };
-
       await transporter.sendMail(mailOptions);
       console.log(`Daily publication email sent to: ${email}`);
     }
@@ -2600,120 +2593,110 @@ app.get('/create-app', isAuthenticated, (req, res) => {
   });
 });
 
+// Update the /api/applications/create post route to store icon as Buffer
 app.post('/api/applications/create', isAuthenticated, ApplicationImageUpload.single('icon'), async (req, res) => {
   console.log('req.body:', req.body); // Debug: Log form data
   console.log('req.file:', req.file); // Debug: Log file data
-
   const { 'app-name': name, 'app-description': description, 'app-code': code } = req.body;
-
   try {
     // Validate inputs
     if (!name || !code) {
       console.log('Validation failed:', { name, code }); // Debug: Log validation failure
       return res.status(400).json({ success: false, message: 'Application name and code are required.' });
     }
-
     const scriptsDir = path.join(__dirname, 'user-applications', 'scripts');
     const metadataDir = path.join(__dirname, 'user-applications', 'metadata');
-
     // Create directories if they don't exist
     await fs.mkdir(scriptsDir, { recursive: true });
     await fs.mkdir(metadataDir, { recursive: true });
-
     // Generate unique file name for script
     const appId = Date.now().toString();
     const scriptPath = path.join(scriptsDir, `user-app-${appId}.js`);
     const metadataPath = path.join(metadataDir, `user-app-${appId}.json`);
-
     // Save script to file
     await fs.writeFile(scriptPath, code);
-
-    // Save image path (if uploaded)
-    let iconPath = '/images/default-app-icon.png';
-    if (req.file) {
-      iconPath = `/images/${req.file.filename}`;
-    }
-
     // Save metadata to database
     const application = new Application({
       name,
       description: description || '',
       creatorId: req.user._id,
       filePath: scriptPath,
-      iconPath
+      icon: req.file ? req.file.buffer : null,  // Store as Buffer
+      iconType: req.file ? req.file.mimetype : null  // Store MIME type
     });
     await application.save();
-
-    // Save metadata to JSON file
+    // Save metadata to JSON file (update icon to indicate it's a Buffer, but since JSON is metadata, perhaps omit icon details or adjust)
     await fs.writeFile(metadataPath, JSON.stringify({
       id: application._id.toString(),
       name,
       description: description || '',
       creatorId: req.user._id,
-      iconPath
+      iconPath: `/app-icon/${application._id}`  // Use a route path instead of file path
     }));
-
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving application:', error);
     res.status(500).json({ success: false, message: error.message || 'Failed to save application.' });
   }
 });
+
+app.get('/app-icon/:appId', isAuthenticated, async (req, res) => {
+  try {
+    const application = await Application.findById(req.params.appId);
+    console.log('Fetching icon for app:', req.params.appId, 'Found:', !!application, 'Has icon:', !!application?.icon);
+    if (!application || !application.icon) {
+      console.log('Serving default icon for app:', req.params.appId);
+      return res.sendFile(path.join(__dirname, 'public', 'images', 'default-app-icon.png'));
+    }
+    res.set({
+      'Content-Type': application.iconType || 'image/png',
+      'Content-Disposition': `inline; filename="app-icon-${application._id}.png"`
+    });
+    res.send(application.icon);
+  } catch (err) {
+    console.error('Error serving app icon:', err);
+    res.status(500).send('Failed to load icon');
+  }
+});
 // Route to serve user application scripts
 app.get('/applications/:appId/script', isAuthenticated, async (req, res) => {
   try {
-    const user = req.user;
-    if (user.isAdmin) {
-      return res.status(403).send('Admins cannot access this route');
-    }
     const appId = req.params.appId;
-
-    // Prevent directory traversal
-    if (appId.includes('..') || !appId.match(/^[a-zA-Z0-9-]+$/)) {
-      // Allow MongoDB ObjectId format for user-created apps
-      if (!mongoose.Types.ObjectId.isValid(appId)) {
-        return res.status(400).send('Invalid application ID');
-      }
-    }
-
-    // Check if it's a static application
-    let filePath = path.join(__dirname, 'applications', `${appId}.js`);
+    let appPath = path.join(__dirname, 'applications', `${appId}.js`);
+    console.log('Attempting to serve script for appId:', appId, 'Path:', appPath);
     try {
-      await fs.access(filePath);
+      await fs.access(appPath);
+      res.set('Content-Type', 'text/javascript');
+      return res.sendFile(appPath);
     } catch {
-      // If not a static app, check user-created apps
       const userApp = await Application.findById(appId);
       if (!userApp) {
+        console.log('App not found for appId:', appId);
         return res.status(404).send('Application script not found');
       }
-      filePath = userApp.filePath; // Use the stored filePath from MongoDB
+      console.log('Serving user app script from:', userApp.filePath);
+      res.set('Content-Type', 'text/javascript');
+      res.sendFile(userApp.filePath);
     }
-
-    res.set('Content-Type', 'application/javascript');
-    res.sendFile(filePath, (err) => {
-      if (err) {
-        console.error('Error sending script:', err);
-        res.status(404).send('Application script not found');
-      }
-    });
   } catch (err) {
-    console.error('Application script error:', err);
+    console.error('Error serving app script:', err);
     res.status(500).send('Failed to load application script');
   }
 });
 
+// Update rendering logic where iconPath is used (e.g., in /applications get route)
 app.get('/applications', isAuthenticated, async (req, res) => {
   try {
     const user = req.user;
     if (user.isAdmin) {
       return res.redirect('/admin');
     }
-    const userApps = await Application.find({}).select('name _id iconPath');
+    const userApps = await Application.find({}).select('name _id');
     const applications = [
       ...userApps.map(app => ({
         id: app._id.toString(),
         name: app.name,
-        iconPath: app.iconPath
+        iconPath: `/app-icon/${app._id}`  // Use the new route for icon
       }))
     ];
     res.render('application', {
@@ -2721,7 +2704,7 @@ app.get('/applications', isAuthenticated, async (req, res) => {
       applications,
       appId: null,
       note: req.note ? req.note.content : '',
-      currentPage: 'applications'
+      currentPage: 'applications'  // Add this line
     });
   } catch (error) {
     console.error('Error fetching applications:', error);
