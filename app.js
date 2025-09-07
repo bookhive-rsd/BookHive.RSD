@@ -112,6 +112,37 @@ async function validatePdfContent(pdfBuffer) {
     throw new Error('Failed to validate PDF content');
   }
 }
+// Security function to validate the AI-generated MongoDB pipeline
+function isPipelineSafe(pipeline) {
+    if (!Array.isArray(pipeline)) return false;
+
+    const ALLOWED_STAGES = ['$match', '$group', '$sort', '$limit', '$project', '$lookup', '$count'];
+    const FORBIDDEN_FIELDS = ['password', 'email', 'googleId', 'fileData', 'accessList'];
+    const FORBIDDEN_OPERATORS = ['$where'];
+
+    for (const stage of pipeline) {
+        const stageName = Object.keys(stage)[0];
+        if (!ALLOWED_STAGES.includes(stageName)) {
+            console.error(`Validation failed: Disallowed stage found: ${stageName}`);
+            return false;
+        }
+
+        const stageContent = JSON.stringify(stage);
+        for (const field of FORBIDDEN_FIELDS) {
+            if (stageContent.includes(`"${field}"`)) {
+                console.error(`Validation failed: Forbidden field access attempted: ${field}`);
+                return false;
+            }
+        }
+        for (const op of FORBIDDEN_OPERATORS) {
+             if (stageContent.includes(`"${op}"`)) {
+                console.error(`Validation failed: Forbidden operator used: ${op}`);
+                return false;
+            }
+        }
+    }
+    return true; // All checks passed
+}
 // Passport setup
 app.use(passport.initialize());
 app.use(passport.session());
@@ -279,11 +310,10 @@ const News = mongoose.model('News', newsSchema);
 const Publication = mongoose.model('Publication', publicationSchema);
 const Comment = mongoose.model('Comment', commentSchema);
 // Multer for publications (support multiple files: images and PDFs)
-// Multer for publications (support multiple files: images and PDFs)
 const publicationUploadConfig = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
-    const allowedTypes = [/^image\//, /^application\/pdf$/]; 
+    const allowedTypes = [/^image\//, /^application\/pdf$/];
     if (allowedTypes.some(type => type.test(file.mimetype))) {
       cb(null, true);
     } else {
@@ -482,6 +512,30 @@ const isAdmin = async (req, res, next) => {
   req.user = user;
   next();
 };
+
+// A safe, text-based representation of our database schema for the AI
+const DATABASE_SCHEMA_FOR_AI = `
+Here are the available Mongoose collections and their schemas. You must use these plural collection names ('books', 'news', etc.) to construct your queries.
+
+1.  **Collection: 'books'**
+    - Schema: { title: String, author: String, description: String, tags: [String], uploadDate: Date, fileSize: Number, visibility: String, pinCount: Number }
+
+2.  **Collection: 'news'**
+    - Schema: { title: String, content: String, createdAt: Date, postedBy: ObjectId }
+
+3.  **Collection: 'publications'**
+    - Schema: { content: String, postedBy: ObjectId, createdAt: Date, likeCount: Number }
+
+4.  **Collection: 'users'**
+    - Schema: { username: String, profession: String, createdAt: Date, isAdmin: Boolean }
+
+5.  **Collection: 'comments'**
+    - Schema: { publication: ObjectId, user: ObjectId, content: String, createdAt: Date }
+
+6.  **Collection: 'applications'**
+    - Schema: { name: String, description: String, creatorId: ObjectId, createdAt: Date }
+`;
+
 // Multer error handling
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
@@ -1980,18 +2034,18 @@ app.get('/publications', isAuthenticated, async (req, res) => {
 });
 // Update the /publication post route to support multiple images and PDFs
 app.post('/publication', isAuthenticated, (req, res, next) => {
-    // **FIXED**: Added a specific Multer error handler for this route
-    publicationUpload(req, res, function (err) {
-        if (err instanceof multer.MulterError) {
-            // A Multer error occurred when uploading.
-            return res.status(400).json({ success: false, message: `File upload error: ${err.message}` });
-        } else if (err) {
-            // An unknown error occurred when uploading.
-            return res.status(500).json({ success: false, message: `An unknown error occurred: ${err.message}` });
-        }
-        // Everything went fine, proceed to the route handler.
-        next();
-    });
+  // **FIXED**: Added a specific Multer error handler for this route
+  publicationUpload(req, res, function (err) {
+    if (err instanceof multer.MulterError) {
+      // A Multer error occurred when uploading.
+      return res.status(400).json({ success: false, message: `File upload error: ${err.message}` });
+    } else if (err) {
+      // An unknown error occurred when uploading.
+      return res.status(500).json({ success: false, message: `An unknown error occurred: ${err.message}` });
+    }
+    // Everything went fine, proceed to the route handler.
+    next();
+  });
 }, async (req, res) => {
   try {
     const user = req.user;
@@ -2257,7 +2311,7 @@ app.get('/applications/:appId', isAuthenticated, async (req, res) => {
 app.post('/translate', isAuthenticated, async (req, res) => {
   try {
     const { text, sourceLang, targetLang } = req.body;
-   
+
     if (!text || !targetLang) {
       return res.status(400).json({ success: false, message: 'Text and target language are required' });
     }
@@ -2269,7 +2323,7 @@ app.post('/translate', isAuthenticated, async (req, res) => {
     const prompt = `Translate ${text} to ${targetLang}. Translate to only specified languages. Provide response also for specified languages. And Provide only the translated text without any additional commentary or formatting.`;
     // Call Gemini API using the existing callGeminiAPI function
     const translatedText = await callGeminiAPI(prompt, text);
-   
+
     res.json({ success: true, translatedText: translatedText || 'Translation failed' });
   } catch (err) {
     console.error('Translation error:', err);
@@ -2373,7 +2427,7 @@ async function sendDailyPublicationEmails() {
       .limit(2)
       .populate('postedBy', 'username')
       .lean();
-   
+
     if (publications.length === 0) {
       console.log('No new publications today');
       return;
@@ -2425,9 +2479,6 @@ async function sendDailyPublicationEmails() {
     console.error('Error sending daily publication emails:', err);
   }
 }
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
 app.get('/create-app', isAuthenticated, (req, res) => {
   res.render('create-app', {
     user: req.user,
@@ -2554,9 +2605,141 @@ app.get('/applications', isAuthenticated, async (req, res) => {
     });
   }
 });
+
+app.post('/api/chatbot', isAuthenticated, async (req, res) => {
+    try {
+        const { query } = req.body;
+        if (!query) return res.status(400).json({ success: false, message: 'Query is required.' });
+
+        // --- Step 1: Master Dispatcher - AI decides WHICH task to perform ---
+        const taskDispatchPrompt = `
+            You are a master AI agent dispatcher. Your job is to analyze the user's query and categorize it into one of three tasks.
+            Respond ONLY with a valid JSON object.
+
+            1.  **task: "database_query"**: If the user is asking for lists, counts, statistics, or relationships in the data. (e.g., "how many books?", "who has the most publications?", "list recent news").
+            2.  **task: "content_summary"**: If the user wants a summary, description, or details from the CONTENT of a SINGLE, SPECIFIC item. The user must name the item. (e.g., "summarize the book 'sampleBook'", "what is the news article 'New Update' about?").
+            3.  **task: "general_conversation"**: For greetings, simple questions, or if the intent is unclear.
+
+            The JSON output should be: {"task": "...", "subject": "..."}
+            - 'subject' should be the specific title of the item if the task is 'content_summary'. Otherwise, it can be null.
+
+            User Query: "${query}"
+        `;
+
+        const dispatchText = await callGeminiAPI(taskDispatchPrompt, "");
+        let dispatchPlan = { task: 'general_conversation', subject: null };
+        try {
+            const jsonMatch = dispatchText.match(/\{.*\}/s);
+            if (jsonMatch) dispatchPlan = JSON.parse(jsonMatch[0]);
+        } catch (e) {
+            console.error("Failed to parse dispatch plan:", dispatchText);
+        }
+        console.log('AI Dispatch Plan:', dispatchPlan);
+
+        // --- Step 2: Execute the chosen task ---
+        switch (dispatchPlan.task) {
+
+            // ==========================================================
+            //  TASK: CONTENT SUMMARY
+            // ==========================================================
+            case 'content_summary': {
+                const subject = dispatchPlan.subject;
+                if (!subject) {
+                    return res.json({ success: true, response: "Please specify the exact title of the book, news, or publication you'd like me to summarize." });
+                }
+
+                let itemContent = null;
+                let itemTitle = subject;
+
+                // Search for the item across collections
+                const book = await Book.findOne({ title: new RegExp(`^${subject}$`, 'i') }).select('fileData title');
+                if (book) {
+                    const pdfData = await pdfParse(book.fileData);
+                    itemContent = pdfData.text.slice(0, 20000);
+                } else {
+                    const news = await News.findOne({ title: new RegExp(`^${subject}$`, 'i') }).select('content title');
+                    if (news) {
+                        itemContent = news.content;
+                    } else {
+                        const publication = await Publication.findOne({ content: new RegExp(subject, 'i') }).select('content'); // Publications don't have titles, so search content
+                        if (publication) {
+                            itemContent = publication.content;
+                            itemTitle = `a publication starting with "${publication.content.slice(0, 30)}..."`;
+                        }
+                    }
+                }
+                
+                if (!itemContent) {
+                    return res.json({ success: true, response: `I'm sorry, I couldn't find any content for an item titled "${subject}".` });
+                }
+
+                const summaryPrompt = `Please provide a detailed summary of the following content from "${itemTitle}". The user's original question was: "${query}"\n\n--- CONTENT ---\n${itemContent}`;
+                const finalResponse = await callGeminiAPI(summaryPrompt, "");
+                return res.json({ success: true, response: finalResponse });
+            }
+
+            // ==========================================================
+            //  TASK: DATABASE QUERY
+            // ==========================================================
+            case 'database_query': {
+                const pipelineGenerationPrompt = `
+                    You are a MongoDB expert AI. Convert the user's question into a secure, read-only MongoDB aggregation pipeline.
+                    Rules: Use the provided schema ONLY. Your output MUST be a JSON object: {"collection": "...", "pipeline": [...]}.
+                    --- DATABASE SCHEMA ---
+                    ${DATABASE_SCHEMA_FOR_AI}
+                    ---
+                    User Question: "${query}"
+                `;
+                const pipelineText = await callGeminiAPI(pipelineGenerationPrompt, "");
+                let queryPlan = { collection: null, pipeline: [] };
+                try {
+                    const jsonMatch = pipelineText.match(/\{.*\}/s);
+                    if (jsonMatch) queryPlan = JSON.parse(jsonMatch[0]);
+                } catch (e) {
+                     return res.json({ success: true, response: "I had trouble formulating a database query. Please rephrase." });
+                }
+
+                console.log('AI Generated Query Plan:', queryPlan);
+                if (!queryPlan.collection || !isPipelineSafe(queryPlan.pipeline)) {
+                    return res.json({ success: true, response: "I'm sorry, I cannot process that specific query." });
+                }
+                
+                const targetCollection = mongoose.connection.collection(queryPlan.collection);
+                const toolResult = await targetCollection.aggregate(queryPlan.pipeline).toArray();
+
+                const finalResponsePrompt = `
+                    A user asked: "${query}"
+                    The database returned this data: ${JSON.stringify(toolResult)}
+                    Based on this data, formulate a friendly, natural language response.
+                `;
+                const finalResponse = await callGeminiAPI(finalResponsePrompt, "");
+                return res.json({ success: true, response: finalResponse });
+            }
+
+            // ==========================================================
+            //  TASK: GENERAL CONVERSATION
+            // ==========================================================
+            case 'general_conversation':
+            default: {
+                const genericPrompt = `The user said: "${query}". Provide a brief, friendly, and helpful response in your persona as the BookHive AI assistant. Guide them on what they can ask (e.g., ask for lists of books, news, or summaries of specific items).`;
+                const finalResponse = await callGeminiAPI(genericPrompt, "");
+                return res.json({ success: true, response: finalResponse });
+            }
+        }
+    } catch (err) {
+        console.error('AI Chatbot error:', err);
+        res.status(500).json({ success: false, message: 'An error occurred while processing my thoughts.' });
+    }
+});
+
 cron.schedule('0 21 * * *', () => {
   console.log('Running daily publication email task at 9PM IST');
   sendDailyPublicationEmails();
 }, {
   timezone: 'Asia/Kolkata'
+});
+
+
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
