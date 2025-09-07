@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="/bookhive/">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Publications - BookHive</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <style>
+    body { background-color: #f3f2ef; }
+    .publication-content ul, .publication-content ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    .publication-content a { color: #0a66c2; text-decoration: underline; }
+    .action-button { display: inline-flex; align-items: center; padding: 0.5rem 0.75rem; border-radius: 0.375rem; font-weight: 600; color: #666666; transition: background-color 0.2s; }
+    .action-button:hover { background-color: #e0e0e0; }
+    .action-button i { margin-right: 0.5rem; font-size: 1.25rem; }
+    .like-button.liked { color: #0a66c2; font-weight: 700; }
+    .welcome-text { color: white; font-size: 1.0rem; font-weight: 600; text-shadow: 0 2px 4px rgba(0, 0, 0, 1.5); animation: bouncingText 2s infinite; font-family: 'Poppins', sans-serif; }
+    @keyframes bouncingText { 0%, 20%, 50%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-20px); } 60% { transform: translateY(-10px); } }
+    .image-carousel { position: relative; background-color: #f0f2f5; }
+    .carousel-image { max-height: 350px; width: 100%; object-fit: contain; }
+    .carousel-button { position: absolute; top: 50%; transform: translateY(-50%); background-color: rgba(0, 0, 0, 0.4); color: white; border: none; border-radius: 50%; width: 2.5rem; height: 2.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background-color 0.2s; }
+    .carousel-button:hover { background-color: rgba(0, 0, 0, 0.6); }
+    .carousel-button.prev { left: 0.5rem; }
+    .carousel-button.next { right: 0.5rem; }
+    .carousel-counter { position: absolute; top: 0.5rem; right: 0.5rem; background-color: rgba(0, 0, 0, 0.6); color: white; padding: 0.25rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; font-weight: bold; }
+    /* New: Wrapper for positioning the chatbot relative to the icon */
+    .chatbot-wrapper {
+        position: fixed;
+        bottom: 25px; /* Adjust to match desired distance from bottom */
+        right: 25px; /* Adjust to match desired distance from right */
+        z-index: 1000;
+    }
+
+    /* Chatbot Toggle Button Styles (already exists, but ensure it's here) */
+    .chatbot-toggle-btn {
+        width: 60px;
+        height: 60px;
+        background-color: #0a66c2; /* A blue matching the theme */
+        color: white;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: transform 0.2s ease-in-out, background-color 0.2s;
+        font-size: 1.5rem;
+    }
+
+    .chatbot-toggle-btn:hover {
+        transform: scale(1.1);
+        background-color: #004182;
+    }
+
+    /* Chatbot Container Styles (Adjusted for "whiteboard" effect) */
+    .chatbot-container {
+        position: absolute; /* Positioned relative to .chatbot-wrapper */
+        bottom: calc(100% + 15px); /* Place 15px above the toggle button */
+        right: 0; /* Align with the right edge of the wrapper/button */
+        width: 350px; /* Adjust width as desired */
+        max-height: 450px; /* Adjust max height as desired */
+        background-color: #ffffff; /* White background for whiteboard look */
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden; /* Hide scrollbars for container itself */
+        opacity: 0; /* Start hidden */
+        visibility: hidden; /* Start hidden */
+        transform: translateY(10px); /* Slight initial offset for animation */
+        transition: opacity 0.3s ease-out, transform 0.3s ease-out, visibility 0.3s;
+    }
+
+    /* Active state for the chatbot container */
+    .chatbot-container.active {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+
+    /* Chatbot Header */
+    .chatbot-header {
+        background-color: #0a66c2;
+        color: white;
+        padding: 10px 15px;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top-left-radius: 10px; /* Match container border-radius */
+        border-top-right-radius: 10px; /* Match container border-radius */
+    }
+
+    .chatbot-close-btn {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 1.5rem;
+        cursor: pointer;
+        line-height: 1; /* Ensure good alignment */
+    }
+
+    /* Chatbot Body (message display area) */
+    .chatbot-body {
+        flex-grow: 1;
+        padding: 15px;
+        overflow-y: auto; /* Enable scrolling for messages */
+        background-color: #f9f9f9;
+    }
+
+    /* Chat message styling */
+    .chat-message {
+        margin-bottom: 10px;
+        max-width: 80%;
+        word-wrap: break-word; /* Ensure long words wrap */
+    }
+
+    .chat-message p {
+        padding: 8px 12px;
+        border-radius: 15px;
+        line-height: 1.4;
+    }
+
+    .chat-message.user {
+        align-self: flex-end;
+        margin-left: auto; /* Push user messages to the right */
+        background-color: #e0f2f7; /* Light blue for user messages */
+        color: #333;
+        border-bottom-right-radius: 0;
+    }
+
+    .chat-message.bot {
+        align-self: flex-start;
+        margin-right: auto; /* Push bot messages to the left */
+        background-color: #f1f0f0; /* Light gray for bot messages */
+        color: #333;
+        border-bottom-left-radius: 0;
+    }
+
+    /* Loading indicator for bot typing */
+    .chat-message.loading p {
+        display: flex;
+        gap: 3px;
+        background-color: #f1f0f0;
+        width: fit-content; /* Adjust width to content */
+    }
+    .chat-message.loading p span {
+        width: 8px;
+        height: 8px;
+        background-color: #aaa;
+        border-radius: 50%;
+        animation: bounce 1.4s infinite ease-in-out both;
+    }
+    .chat-message.loading p span:nth-child(1) { animation-delay: -0.32s; }
+    .chat-message.loading p span:nth-child(2) { animation-delay: -0.16s; }
+    .chat-message.loading p span:nth-child(3) { animation-delay: 0s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+
+
+    /* Chatbot Input Area */
+    .chatbot-input-container {
+        display: flex;
+        padding: 10px 15px;
+        border-top: 1px solid #eee;
+        background-color: #f0f2f5;
+        border-bottom-left-radius: 10px; /* Match container border-radius */
+        border-bottom-right-radius: 10px; /* Match container border-radius */
+    }
+
+    .chatbot-input-container input[type="text"] {
+        flex-grow: 1;
+        border: 1px solid #ccc;
+        border-radius: 20px;
+        padding: 8px 12px;
+        font-size: 0.9rem;
+        outline: none;
+        margin-right: 8px;
+    }
+
+    .chatbot-input-container button {
+        background-color: #0a66c2;
+        color: white;
+        border: none;
+        border-radius: 20px;
+        padding: 8px 15px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: background-color 0.2s;
+    }
+
+    .chatbot-input-container button:hover {
+        background-color: #004182;
+    }
+  </style>
+</head>
+<body class="font-sans">
+  <header class="header">
+    <div class="container">
+      <div class="logo-section">
+        <a href="/"><img src="/images/logo-removebg-preview.png" alt="BookHive Logo" class="logo"></a>
+        <a href="/" class="welcome-text">Welcome to BookHive, <%= user.username %></a>
+      </div>
+      <nav class="nav-menu">
+        <a href="/applications" class="nav-link"><i class="fas fa-th"></i> Applications</a>
+        <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
+        <a href="/publications" class="nav-link active"><i class="fas fa-book-open"></i> Publications</a>
+        <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
+        <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
+        <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container mx-auto mt-8 px-4 w-[70%]">
+    <h2 class="text-3xl font-bold mb-6 text-center text-gray-800">Publications</h2>
+
+    <% if (user) { %>
+      <section id="publication-form" class="bg-white p-4 rounded-lg border border-gray-300 shadow-sm mb-8">
+        <h3 class="text-xl font-semibold mb-4 text-gray-700">Share Your Thoughts</h3>
+        <form id="create-publication-form" enctype="multipart/form-data">
+          <div id="publication-editor-container" class="mb-4 border rounded-md">
+            <div id="publication-editor" class="h-32"></div>
+          </div>
+          <input type="hidden" id="publication-content" name="content">
+          <div class="mb-4">
+            <label for="publication-files" class="cursor-pointer text-blue-600 hover:text-blue-800 font-semibold">
+              <i class="fas fa-photo-video"></i> Add Images or Documents
+            </label>
+            <input type="file" id="publication-files" name="files" accept="image/jpeg,image/png,application/pdf" class="hidden" multiple>
+          </div>
+          <div id="file-previews" class="mt-4 grid grid-cols-3 md:grid-cols-5 gap-4 mb-4"></div>
+          <div class="flex items-center justify-end">
+            <button type="submit" id="submit-publication" class="bg-blue-600 text-white px-6 py-2 rounded-full font-bold hover:bg-blue-700 disabled:bg-gray-400">Post</button>
+          </div>
+        </form>
+        <div id="publicationError" class="text-red-500 mt-2 hidden"></div>
+        <div id="publicationSuccess" class="text-green-500 mt-2 hidden"></div>
+      </section>
+    <% } %>
+
+    <div id="publications-list" class="space-y-4 w-11/12 mx-auto">
+      <% publications.forEach(function(publication) { %>
+        <div class="bg-white rounded-lg border border-gray-300 shadow-sm publication-item" data-publication-id="<%= publication._id %>">
+          <div class="p-3">
+            <div class="flex items-center mb-3">
+              <div class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center font-bold text-gray-600 text-lg mr-2">
+                <%= publication.postedBy ? publication.postedBy.username.charAt(0).toUpperCase() : '?' %>
+              </div>
+              <div>
+                <p class="font-semibold text-base text-gray-800"><%= publication.postedBy ? publication.postedBy.username : 'Unknown User' %></p>
+                <span class="text-gray-500 text-xs"><%= new Date(publication.createdAt).toLocaleString() %></span>
+              </div>
+            </div>
+            <div class="publication-content text-sm mb-3 text-gray-700"><%- publication.content %></div>
+          </div>
+          
+          <div class="media-container space-y-2">
+            <% if (publication.images && publication.images.length > 0) { %>
+              <div class="image-carousel" data-total="<%= publication.images.length %>">
+                <% publication.images.forEach(function(image, index) { %>
+                  <img src="/publication-file/<%= publication._id %>/image/<%= index %>" 
+                       alt="Publication Image <%= index + 1 %>"
+                       class="carousel-image <%= index === 0 ? 'block' : 'hidden' %>"
+                       data-index="<%= index %>">
+                <% }) %>
+                <% if (publication.images.length > 1) { %>
+                  <button class="carousel-button prev"><i class="fas fa-chevron-left"></i></button>
+                  <button class="carousel-button next"><i class="fas fa-chevron-right"></i></button>
+                  <div class="carousel-counter">1 / <%= publication.images.length %></div>
+                <% } %>
+              </div>
+            <% } %>
+
+            <% if (publication.documents && publication.documents.length > 0) { %>
+              <% publication.documents.forEach(function(doc, index) { %>
+                <div class="p-3">
+                  <p class="font-semibold text-sm mb-2 text-gray-600"><%= doc.filename %></p>
+                  <iframe src="/publication-file/<%= publication._id %>/document/<%= index %>" class="w-full h-72 rounded-md border"></iframe>
+                </div>
+              <% }) %>
+            <% } %>
+          </div>
+
+          <div class="p-2 border-t border-gray-200">
+            <div class="flex items-center justify-around">
+              <% const isLiked = user && publication.likes.some(id => id.toString() === user._id.toString()); %>
+              <button class="like-button action-button <%= isLiked ? 'liked' : '' %>">
+                <i class="far fa-thumbs-up"></i>
+                <span class="like-text"><%= isLiked ? 'Liked' : 'Like' %></span>&nbsp;
+                (<span class="like-count"><%= publication.likeCount || 0 %></span>)
+              </button>
+              <button class="comment-toggle action-button">
+                <i class="far fa-comment-dots"></i> Comment
+              </button>
+            </div>
+          </div>
+
+          <div class="comment-section bg-gray-50 p-3 border-t border-gray-200 hidden">
+            <form class="comment-form flex items-center space-x-2">
+              <input name="content" class="w-full p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Add a comment..." required>
+              <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-full font-semibold hover:bg-blue-700">Post</button>
+            </form>
+            <div class="comments-list mt-4 space-y-3">
+              <% (comments[publication._id.toString()] || []).forEach(function(comment) { %>
+                <div class="comment-item" data-id="<%= comment._id %>">
+                  <p class="font-semibold text-sm text-gray-800"><%= comment.user ? comment.user.username : 'Unknown User' %></p>
+                  <p class="text-gray-600 text-sm"><%= comment.content %></p>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  </main>
+
+  <% if (user) { %><script>window.currentUserId = '<%= user._id %>';</script><% } %>
+  <footer>
+      <div class="container"><p>© 2025 BookHive. All rights reserved.</p></div>
+  </footer>
+
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/script.js"></script>
+  <%- include('partials/chatbot') %>
+  
+  <script src="/js/chatbot.js"></script>
+</body>
+</html>

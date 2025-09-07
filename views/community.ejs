@@ -1,0 +1,1865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="/bookhive/">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Community - BookHive</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Fira+Code:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --primary-color: #3b82f6;
+      --secondary-color: #8b5cf6;
+      --accent-color: #10b981;
+      --dark-bg: #1f2937;
+      --darker-bg: #111827;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      transition: all 0.3s ease;
+    }
+
+    /* Chat Message Styles */
+    .message-professional {
+      border-left: 4px solid #3b82f6;
+      background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+      font-weight: 500;
+    }
+
+    .message-casual {
+      border-radius: 20px;
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border: 2px solid #f59e0b;
+    }
+
+    .message-academic {
+      border: 2px solid #6366f1;
+      background: linear-gradient(135deg, #f0f0ff 0%, #e5e7eb 100%);
+      font-family: 'Crimson Text', serif;
+      font-size: 1.05rem;
+      line-height: 1.6;
+    }
+
+    .message-creative {
+      background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
+      border: 2px solid #ec4899;
+      border-radius: 15px;
+      font-style: italic;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .message-creative::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -2px;
+      background: linear-gradient(45deg, #ec4899, #8b5cf6, #3b82f6, #10b981);
+      border-radius: 15px;
+      z-index: -1;
+      animation: rainbow 3s ease infinite;
+    }
+
+    @keyframes rainbow {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    .message-technical {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #64ffda;
+      font-family: 'Fira Code', monospace;
+      border: 1px solid #22d3ee;
+      box-shadow: 0 0 20px rgba(34, 211, 238, 0.3);
+    }
+
+    .message-technical .text-gray-700 {
+      color: #64ffda !important;
+    }
+
+    .message-debate {
+      border-left: 4px solid #dc2626;
+      background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+      font-weight: 600;
+      position: relative;
+    }
+
+    .message-debate::before {
+      content: '⚡';
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 1.2rem;
+      animation: pulse 1.5s infinite;
+    }
+
+    .chat-container {
+      height: 60vh;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+
+    .chat-message {
+      animation: slideInMessage 0.5s ease-in-out;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .chat-message:hover {
+      transform: translateX(5px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    @keyframes slideInMessage {
+      from { 
+        transform: translateX(-30px) translateY(20px); 
+        opacity: 0;
+        scale: 0.95;
+      }
+      to { 
+        transform: translateX(0) translateY(0); 
+        opacity: 1;
+        scale: 1;
+      }
+    }
+
+    .style-selector {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+      border-radius: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .style-button {
+      transition: all 0.4s ease;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+      border: 2px solid transparent;
+    }
+
+    .style-button:hover {
+      transform: scale(1.05) rotate(2deg);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+
+    .style-button.active {
+      border-color: white;
+      box-shadow: 0 0 20px rgba(255,255,255,0.5);
+      transform: scale(1.1);
+    }
+
+    .style-button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      transition: left 0.5s;
+    }
+
+    .style-button:hover::before {
+      left: 100%;
+    }
+
+    .typing-indicator {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      background: linear-gradient(135deg, #ddd6fe 0%, #c4b5fd 100%);
+      border-radius: 20px;
+      margin: 10px 0;
+      border-left: 4px solid #8b5cf6;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .typing-dots {
+      display: flex;
+      gap: 4px;
+    }
+
+    .typing-dot {
+      width: 8px;
+      height: 8px;
+      background: #8b5cf6;
+      border-radius: 50%;
+      animation: typingDot 1.4s infinite ease-in-out;
+    }
+
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes typingDot {
+      0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    .chat-sidebar {
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    .fade-in {
+      animation: fadeIn 0.6s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .glow-button {
+      animation: glow 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes glow {
+      from { box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+      to { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 0 30px rgba(59, 130, 246, 0.6); }
+    }
+
+    .style-preview-box {
+      background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+      border: 2px solid #d1d5db;
+      border-radius: 10px;
+      padding: 15px;
+      margin-top: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .style-preview-box::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+      animation: shimmer 2s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { left: -100%; }
+      100% { left: 100%; }
+    }
+
+    .username-professional { color: #1e40af !important; }
+    .username-casual { color: #f59e0b !important; }
+    .username-academic { color: #6366f1 !important; }
+    .username-creative { color: #ec4899 !important; }
+    .username-technical { color: #22d3ee !important; }
+    .username-debate { color: #dc2626 !important; }
+
+    .style-badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-professional { background: #dbeafe; color: #1e40af; }
+    .badge-casual { background: #fef3c7; color: #f59e0b; }
+    .badge-academic { background: #e0e7ff; color: #6366f1; }
+    .badge-creative { background: #fce7f3; color: #ec4899; }
+    .badge-technical { background: #0f172a; color: #22d3ee; }
+    .badge-debate { background: #fee2e2; color: #dc2626; }
+
+    .enhanced-input {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .enhanced-input::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+      transition: left 0.5s;
+    }
+
+    .enhanced-input:focus-within::before {
+      left: 100%;
+    }
+
+    .message-timestamp {
+      font-size: 0.75rem;
+      opacity: 0.7;
+    }
+
+    .chat-message:hover .message-timestamp {
+      opacity: 1;
+    }
+
+    /* Translation specific styles */
+    .translation-controls {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 15px;
+      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
+      color: white;
+    }
+
+    .language-selector {
+      background: rgba(255, 255, 255, 0.15);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      border-radius: 8px;
+      padding: 8px 12px;
+      backdrop-filter: blur(10px);
+    }
+
+    .language-selector option {
+      background: #064e3b;
+      color: white;
+    }
+
+    .translate-button {
+      background: rgba(255, 255, 255, 0.2);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .translate-button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+
+    .translate-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .original-text {
+      opacity: 0.8;
+    }
+
+    .translated-text {
+      font-weight: 500;
+      border-left: 3px solid #10b981;
+      padding-left: 8px;
+      margin-top: 8px;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 8px;
+      border-radius: 6px;
+    }
+
+    .translation-indicator {
+      font-size: 0.7rem;
+      color: #10b981;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .loading-translation {
+      animation: pulse 1s infinite;
+    }
+
+    .language-flag {
+      font-size: 1.2em;
+      margin-right: 6px;
+    }
+
+    /* Dark mode support */
+    .dark .chat-message {
+      background: #374151;
+      color: #f9fafb;
+    }
+    .welcome-text {
+      color: white;
+      font-size: 1.0rem;
+      font-weight: 600;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 1.5);
+      animation: bouncingText 2s infinite; /* Applying the animation */
+      font-family: 'Poppins', sans-serif;
+      text-decoration: none;
+    }
+    .welcome-link {
+      text-decoration: none;
+    }
+    @keyframes bouncingText {
+        0%, 20%, 50%, 80%, 100% {
+            transform: translateY(0);
+        }
+        40% {
+            transform: translateY(-20px);
+        }
+        60% {
+            transform: translateY(-10px);
+        }
+    }
+    .chatbot-wrapper {
+        position: fixed;
+        bottom: 25px; /* Adjust to match desired distance from bottom */
+        right: 25px; /* Adjust to match desired distance from right */
+        z-index: 1000;
+    }
+
+    /* Chatbot Toggle Button Styles (already exists, but ensure it's here) */
+    .chatbot-toggle-btn {
+        width: 60px;
+        height: 60px;
+        background-color: #0a66c2; /* A blue matching the theme */
+        color: white;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: transform 0.2s ease-in-out, background-color 0.2s;
+        font-size: 1.5rem;
+    }
+
+    .chatbot-toggle-btn:hover {
+        transform: scale(1.1);
+        background-color: #004182;
+    }
+
+    /* Chatbot Container Styles (Adjusted for "whiteboard" effect) */
+    .chatbot-container {
+        position: absolute; /* Positioned relative to .chatbot-wrapper */
+        bottom: calc(100% + 15px); /* Place 15px above the toggle button */
+        right: 0; /* Align with the right edge of the wrapper/button */
+        width: 350px; /* Adjust width as desired */
+        max-height: 450px; /* Adjust max height as desired */
+        background-color: #ffffff; /* White background for whiteboard look */
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden; /* Hide scrollbars for container itself */
+        opacity: 0; /* Start hidden */
+        visibility: hidden; /* Start hidden */
+        transform: translateY(10px); /* Slight initial offset for animation */
+        transition: opacity 0.3s ease-out, transform 0.3s ease-out, visibility 0.3s;
+    }
+
+    /* Active state for the chatbot container */
+    .chatbot-container.active {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+
+    /* Chatbot Header */
+    .chatbot-header {
+        background-color: #0a66c2;
+        color: white;
+        padding: 10px 15px;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top-left-radius: 10px; /* Match container border-radius */
+        border-top-right-radius: 10px; /* Match container border-radius */
+    }
+
+    .chatbot-close-btn {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 1.5rem;
+        cursor: pointer;
+        line-height: 1; /* Ensure good alignment */
+    }
+
+    /* Chatbot Body (message display area) */
+    .chatbot-body {
+        flex-grow: 1;
+        padding: 15px;
+        overflow-y: auto; /* Enable scrolling for messages */
+        background-color: #f9f9f9;
+    }
+
+    /* Chat message styling */
+    .chat-message {
+        margin-bottom: 10px;
+        max-width: 80%;
+        word-wrap: break-word; /* Ensure long words wrap */
+    }
+
+    .chat-message p {
+        padding: 8px 12px;
+        border-radius: 15px;
+        line-height: 1.4;
+    }
+
+    .chat-message.user {
+        align-self: flex-end;
+        margin-left: auto; /* Push user messages to the right */
+        background-color: #e0f2f7; /* Light blue for user messages */
+        color: #333;
+        border-bottom-right-radius: 0;
+    }
+
+    .chat-message.bot {
+        align-self: flex-start;
+        margin-right: auto; /* Push bot messages to the left */
+        background-color: #f1f0f0; /* Light gray for bot messages */
+        color: #333;
+        border-bottom-left-radius: 0;
+    }
+
+    /* Loading indicator for bot typing */
+    .chat-message.loading p {
+        display: flex;
+        gap: 3px;
+        background-color: #f1f0f0;
+        width: fit-content; /* Adjust width to content */
+    }
+    .chat-message.loading p span {
+        width: 8px;
+        height: 8px;
+        background-color: #aaa;
+        border-radius: 50%;
+        animation: bounce 1.4s infinite ease-in-out both;
+    }
+    .chat-message.loading p span:nth-child(1) { animation-delay: -0.32s; }
+    .chat-message.loading p span:nth-child(2) { animation-delay: -0.16s; }
+    .chat-message.loading p span:nth-child(3) { animation-delay: 0s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+
+
+    /* Chatbot Input Area */
+    .chatbot-input-container {
+        display: flex;
+        padding: 10px 15px;
+        border-top: 1px solid #eee;
+        background-color: #f0f2f5;
+        border-bottom-left-radius: 10px; /* Match container border-radius */
+        border-bottom-right-radius: 10px; /* Match container border-radius */
+    }
+
+    .chatbot-input-container input[type="text"] {
+        flex-grow: 1;
+        border: 1px solid #ccc;
+        border-radius: 20px;
+        padding: 8px 12px;
+        font-size: 0.9rem;
+        outline: none;
+        margin-right: 8px;
+    }
+
+    .chatbot-input-container button {
+        background-color: #0a66c2;
+        color: white;
+        border: none;
+        border-radius: 20px;
+        padding: 8px 15px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: background-color 0.2s;
+    }
+
+    .chatbot-input-container button:hover {
+        background-color: #004182;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans">
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="logo-section">
+        <a href="/">
+          <img src="/images/logo-removebg-preview.png" alt="BookHive Logo" class="logo">
+        </a>
+        <a href="/images/logo-removebg-preview.png" class="welcome-link">
+          <div class="welcome-text">Welcome to BookHive, <%= user.username %></div>
+        </a>
+      </div>
+      <nav class="nav-menu">
+        <a href="/applications" class="nav-link"><i class="fas fa-th"></i> Applications</a>
+        <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
+        <a href="/publications" class="nav-link"><i class="fas fa-book-open"></i> Publications</a>
+        <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
+        <a href="/community" class="nav-link active"><i class="fas fa-comments"></i> Community</a>
+        <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container mx-auto mt-8 px-4">
+    <h2 class="text-3xl font-bold mb-6 text-center text-blue-600 fade-in">BookHive Community</h2>
+    
+    <!-- Translation Controls -->
+    <div class="translation-controls fade-in">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-2">
+          <i class="fas fa-language text-xl"></i>
+          <h3 class="text-lg font-semibold">Translation Settings</h3>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-2">
+            <label class="text-sm font-medium">Translate to:</label>
+            <select id="targetLanguage" class="language-selector">
+              <option value="">Select Language</option>
+              <option value="bengali">🇮🇳 Bengali</option>
+              <option value="bodo">🇮🇳 Bodo</option>
+              <option value="dogri">🇮🇳 Dogri</option>
+              <option value="gujarati">🇮🇳 Gujarati</option>
+              <option value="hindi">🇮🇳 Hindi</option>
+              <option value="kannada">🇮🇳 Kannada</option>
+              <option value="kashmiri">🇮🇳 Kashmiri</option>
+              <option value="konkani">🇮🇳 Konkani</option>
+              <option value="maithili">🇮🇳 Maithili</option>
+              <option value="malayalam">🇮🇳 Malayalam</option>
+              <option value="manipuri">🇮🇳 Manipuri (Meitei)</option>
+              <option value="marathi">🇮🇳 Marathi</option>
+              <option value="nepali">🇮🇳 Nepali</option>
+              <option value="odia">🇮🇳 Odia</option>
+              <option value="punjabi">🇮🇳 Punjabi</option>
+              <option value="santali">🇮🇳 Santali</option>
+              <option value="sindhi">🇮🇳 Sindhi</option>
+              <option value="tamil">🇮🇳 Tamil</option>
+              <option value="telugu">🇮🇳 Telugu</option>
+              <option value="urdu">🇮🇳 Urdu</option>
+              <option value="sanskrit">🇮🇳 Sanskrit</option>
+              <option value="tulu">🇮🇳 Tulu</option>
+              <option value="bhojpuri">🇮🇳 Bhojpuri</option>
+              <option value="spanish">🇪🇸 Spanish</option>
+              <option value="french">🇫🇷 French</option>
+              <option value="german">🇩🇪 German</option>
+              <option value="italian">🇮🇹 Italian</option>
+              <option value="portuguese">🇵🇹 Portuguese</option>
+              <option value="russian">🇷🇺 Russian</option>
+              <option value="chinese">🇨🇳 Chinese</option>
+              <option value="japanese">🇯🇵 Japanese</option>
+              <option value="korean">🇰🇷 Korean</option>
+              <option value="arabic">🇸🇦 Arabic</option>
+              <option value="dutch">🇳🇱 Dutch</option>
+              <option value="swedish">🇸🇪 Swedish</option>
+              <option value="norwegian">🇳🇴 Norwegian</option>
+              <option value="danish">🇩🇰 Danish</option>
+              <option value="finnish">🇫🇮 Finnish</option>
+              <option value="turkish">🇹🇷 Turkish</option>
+              <option value="polish">🇵🇱 Polish</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="autoTranslate" class="rounded">
+            <label for="autoTranslate" class="text-sm">Auto-translate new messages</label>
+          </div>
+          <button id="setDefaultLanguage" class="translate-button">
+            <i class="fas fa-star mr-1"></i> Set as Default
+          </button>
+          <button id="translateAllMessages" class="translate-button">
+            <i class="fas fa-sync mr-1"></i> Translate All
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enhanced Style Selector -->
+    <!-- <div class="style-selector fade-in">
+      <h3 class="text-lg font-semibold mb-4 text-white flex items-center">
+        <i class="fas fa-palette mr-2"></i>
+        Choose Your Conversation Style
+      </h3>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <button class="style-button bg-blue-600 text-white p-3 rounded-lg text-center active" data-style="professional">
+          <i class="fas fa-briefcase text-lg mb-1"></i>
+          <div class="text-sm font-medium">Professional</div>
+        </button>
+        <button class="style-button bg-yellow-500 text-white p-3 rounded-lg text-center" data-style="casual">
+          <i class="fas fa-smile text-lg mb-1"></i>
+          <div class="text-sm font-medium">Casual</div>
+        </button>
+        <button class="style-button bg-indigo-600 text-white p-3 rounded-lg text-center" data-style="academic">
+          <i class="fas fa-graduation-cap text-lg mb-1"></i>
+          <div class="text-sm font-medium">Academic</div>
+        </button>
+        <button class="style-button bg-pink-500 text-white p-3 rounded-lg text-center" data-style="creative">
+          <i class="fas fa-feather-alt text-lg mb-1"></i>
+          <div class="text-sm font-medium">Creative</div>
+        </button>
+        <button class="style-button bg-cyan-500 text-white p-3 rounded-lg text-center" data-style="technical">
+          <i class="fas fa-code text-lg mb-1"></i>
+          <div class="text-sm font-medium">Technical</div>
+        </button>
+        <button class="style-button bg-red-600 text-white p-3 rounded-lg text-center" data-style="debate">
+          <i class="fas fa-gavel text-lg mb-1"></i>
+          <div class="text-sm font-medium">Debate</div>
+        </button>
+      </div>
+      <div class="mt-3 text-sm text-white opacity-80">
+        <i class="fas fa-keyboard mr-1"></i>
+        Pro tip: Use Ctrl+1-6 for quick style switching
+      </div>
+    </div> -->
+
+    <div class="flex flex-col lg:flex-row gap-6">
+      <!-- Enhanced Public Chat -->
+      <div class="lg:w-2/3 bg-white p-6 rounded-lg shadow-lg">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-semibold flex items-center">
+            <i class="fas fa-comments mr-2 text-blue-600"></i>
+            Public Group Chat
+          </h3>
+          <div class="flex items-center gap-4">
+            <span class="text-gray-500 flex items-center">
+              <i class="fas fa-users mr-1"></i> 
+              <span id="activeUsers"><%= activeUsers %></span> Active
+            </span>
+            <div class="text-sm">
+              Current Style: <span id="currentStyle" class="font-semibold text-blue-600">Professional</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Enhanced Typing Indicator -->
+        <div id="typingIndicator" class="typing-indicator">
+          <div class="typing-dots">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+          </div>
+          <span class="text-sm font-medium">
+            <span id="typingUser"></span> is crafting a message...
+          </span>
+        </div>
+
+        <div id="publicChatMessages" class="chat-container space-y-4 mb-4">
+          <% messages.forEach((message, index) => { %>
+            <div class="chat-message message-professional bg-gray-50 p-4 rounded-lg shadow-sm" 
+                 data-message-id="<%= message._id %>" 
+                 data-original-text="<%= message.content %>"
+                 style="animation-delay: <%= index * 0.1 %>s">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <p class="font-semibold username-professional"><%= message.user.username %></p>
+                  <span class="style-badge badge-professional">Professional</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button class="translate-message-btn text-gray-400 hover:text-green-600 transition" 
+                          data-message-id="<%= message._id %>">
+                    <i class="fas fa-language text-sm"></i>
+                  </button>
+                  <span class="message-timestamp text-gray-500">
+                    <%= new Date(message.timestamp).toLocaleString() %>
+                  </span>
+                </div>
+              </div>
+              <p class="text-gray-700 leading-relaxed message-content"><%= message.content %></p>
+            </div>
+          <% }) %>
+        </div>
+
+        <!-- Enhanced Message Input -->
+        <div class="border-t pt-4">
+          <div class="mb-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <label class="text-sm font-medium text-gray-700">Message Style:</label>
+              <select id="messageStyle" class="p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 enhanced-input">
+                <option value="professional">Professional</option>
+                <option value="casual">Casual & Friendly</option>
+                <option value="academic">Academic</option>
+                <option value="creative">Creative & Poetic</option>
+                <option value="technical">Technical</option>
+                <option value="debate">Debate Mode</option>
+              </select>
+            </div>
+            <button id="stylePreview" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition flex items-center gap-2">
+              <i class="fas fa-eye"></i> Preview
+            </button>
+          </div>
+          
+          <form id="publicChatForm" class="flex gap-3">
+            <div class="flex-1 enhanced-input">
+              <input type="text" id="publicMessageInput" 
+                     class="w-full p-4 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all" 
+                     placeholder="Share your thoughts in professional style...">
+            </div>
+            <button type="submit" class="bg-blue-600 text-white px-6 py-4 rounded-lg hover:bg-blue-700 transition glow-button flex items-center gap-2">
+              <i class="fas fa-paper-plane"></i> 
+              <span class="hidden sm:inline">Send</span>
+            </button>
+          </form>
+          
+          <!-- Enhanced Style Preview -->
+          <div id="stylePreviewBox" class="hidden style-preview-box">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="fas fa-magic text-blue-600"></i>
+              <p class="text-sm font-semibold text-gray-700">
+                Preview in <span id="previewStyleName" class="text-blue-600"></span> style:
+              </p>
+            </div>
+            <div id="previewMessage" class="text-gray-800 font-medium"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Enhanced Private Chat Sidebar -->
+      <div class="lg:w-1/3 bg-white p-6 rounded-lg shadow-lg chat-sidebar">
+        <h3 class="text-xl font-semibold mb-4 flex items-center">
+          <i class="fas fa-lock mr-2 text-purple-600"></i>
+          Private Chats
+        </h3>
+        <div id="chat-requests" class="space-y-4">
+          <% chatRequests.forEach(request => { %>
+            <div class="chat-request bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-lg shadow-sm fade-in border-l-4 border-blue-500" 
+                 data-request-id="<%= request._id %>">
+              <p class="font-semibold text-gray-800">
+                <%= request.status === 'pending' ? 
+                    (request.requester._id.toString() === user._id.toString() ? 
+                      `Request sent to ${request.recipient.username}` : 
+                      `Request from ${request.requester.username}`) : 
+                    request.status === 'accepted' ? 
+                      `Chat with ${request.requester._id.toString() === user._id.toString() ? request.recipient.username : request.requester.username}` : 
+                      `Declined by ${request.requester._id.toString() === user._id.toString() ? request.recipient.username : request.requester.username}`
+                %>
+              </p>
+              <% if (request.status === 'pending' && request.recipient._id.toString() === user._id.toString()) { %>
+                <div class="flex gap-2 mt-3">
+                  <button class="accept-request bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-1" 
+                          data-request-id="<%= request._id %>">
+                    <i class="fas fa-check"></i> Accept
+                  </button>
+                  <button class="decline-request bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-1" 
+                          data-request-id="<%= request._id %>">
+                    <i class="fas fa-times"></i> Decline
+                  </button>
+                </div>
+              <% } else if (request.status === 'accepted') { %>
+                <button class="open-chat bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition mt-3 flex items-center gap-1 w-full justify-center" 
+                        data-chat-id="<%= [request.requester._id.toString(), request.recipient._id.toString()].sort().join('_') %>" 
+                        data-recipient-id="<%= request.requester._id.toString() === user._id.toString() ? request.recipient._id : request.requester._id %>">
+                  <i class="fas fa-comments"></i> Open Chat
+                </button>
+              <% } %>
+            </div>
+          <% }) %>
+        </div>
+        <button id="new-chat-request-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-3 rounded-lg hover:from-blue-700 hover:to-purple-700 transition w-full mt-4 glow-button flex items-center justify-center gap-2">
+          <i class="fas fa-plus"></i> Request New Chat
+        </button>
+        <form id="privateChatRequestForm" class="hidden mt-4 space-y-4">
+          <select id="recipientSelect" class="w-full p-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 enhanced-input">
+            <option value="">Select a user</option>
+            <% users.forEach(u => { %>
+              <option value="<%= u._id %>"><%= u.username %></option>
+            <% }) %>
+          </select>
+          <div class="flex gap-2">
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center gap-2 flex-1 justify-center">
+              <i class="fas fa-paper-plane"></i> Send Request
+            </button>
+            <button type="button" id="cancel-request-btn" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Enhanced Private Chat Modal -->
+    <div id="privateChatModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between mb-4 pb-4 border-b">
+          <h3 class="text-xl font-semibold flex items-center gap-2">
+            <i class="fas fa-user-circle text-blue-600"></i>
+            Private Chat with <span id="chatRecipient" class="text-blue-600"></span>
+          </h3>
+          <div class="flex items-center gap-2">
+            <button id="translatePrivateMessages" class="text-gray-400 hover:text-green-600 transition p-2 rounded-full hover:bg-gray-100">
+              <i class="fas fa-language"></i>
+            </button>
+            <button id="closeChatModal" class="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-full transition">
+              <i class="fas fa-times text-lg"></i>
+            </button>
+          </div>
+        </div>
+        <div id="privateChatMessages" class="flex-1 overflow-y-auto space-y-4 mb-4 p-2">
+          <!-- Private messages will be populated dynamically -->
+        </div>
+        <form id="privateChatForm" class="flex gap-3 pt-4 border-t">
+          <div class="flex-1 enhanced-input">
+            <input type="text" id="privateMessageInput" 
+                   class="w-full p-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all" 
+                   placeholder="Type your private message...">
+          </div>
+          <button type="submit" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition glow-button flex items-center gap-2">
+            <i class="fas fa-paper-plane"></i> Send
+          </button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <!-- Pass user ID to JavaScript -->
+  <% if (user) { %>
+    <script>
+      window.currentUserId = '<%= user._id %>';
+      window.currentProfession = '<%= user.profession %>';
+    </script>
+  <% } %>
+
+  <footer>
+    <div class="container">
+      <p>© 2025 BookHive. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let currentStyle = 'professional';
+    let isTyping = false;
+    let typingTimeout;
+    
+    // Translation configuration
+    const GEMINI_API_KEY = 'AIzaSyBcnPIGkKdkSpoJaPv3W3mw3uV7c9pH2QI';
+    const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+    
+    // Translation state
+    let userLanguage = localStorage.getItem('bookhive_user_language') || '';
+    let autoTranslateEnabled = localStorage.getItem('bookhive_auto_translate') === 'true';
+    let translationCache = new Map();
+    
+    // Language mappings
+    const languageNames = {
+      'bengali': 'Bengali',
+      'bodo': 'Bodo',
+      'dogri': 'Dogri',
+      'gujarati': 'Gujarati',
+      'hindi': 'Hindi',
+      'kannada': 'Kannada',
+      'kashmiri': 'Kashmiri',
+      'konkani': 'Konkani',
+      'maithili': 'Maithili',
+      'malayalam': 'Malayalam',
+      'manipuri': 'Manipuri (Meitei)',
+      'marathi': 'Marathi',
+      'nepali': 'Nepali',
+      'odia': 'Odia',
+      'punjabi': 'Punjabi',
+      'santali': 'Santali',
+      'sindhi': 'Sindhi',
+      'tamil': 'Tamil',
+      'telugu': 'Telugu',
+      'urdu': 'Urdu',
+      'sanskrit': 'Sanskrit',
+      'tulu': 'Tulu',
+      'bhojpuri': 'Bhojpuri',
+      'spanish': 'Spanish',
+      'french': 'French', 
+      'german': 'German',
+      'italian': 'Italian',
+      'portuguese': 'Portuguese',
+      'russian': 'Russian',
+      'chinese': 'Chinese (Simplified)',
+      'japanese': 'Japanese',
+      'korean': 'Korean',
+      'arabic': 'Arabic',
+      'dutch': 'Dutch',
+      'swedish': 'Swedish',
+      'norwegian': 'Norwegian',
+      'danish': 'Danish',
+      'finnish': 'Finnish',
+      'turkish': 'Turkish',
+      'polish': 'Polish'
+    };
+
+    // Style configurations with enhanced conversion
+    const styles = {
+      professional: {
+        className: 'message-professional',
+        usernameClass: 'username-professional',
+        badgeClass: 'badge-professional',
+        placeholder: 'Share your professional insights...',
+        color: '#1e40af'
+      },
+      casual: {
+        className: 'message-casual',
+        usernameClass: 'username-casual',
+        badgeClass: 'badge-casual',
+        placeholder: 'What\'s on your mind? 😊',
+        color: '#f59e0b'
+      },
+      academic: {
+        className: 'message-academic',
+        usernameClass: 'username-academic',
+        badgeClass: 'badge-academic',
+        placeholder: 'Contribute to the scholarly discourse...',
+        color: '#6366f1'
+      },
+      creative: {
+        className: 'message-creative',
+        usernameClass: 'username-creative',
+        badgeClass: 'badge-creative',
+        placeholder: 'Express your creative thoughts... ✨',
+        color: '#ec4899'
+      },
+      technical: {
+        className: 'message-technical',
+        usernameClass: 'username-technical',
+        badgeClass: 'badge-technical',
+        placeholder: 'Share technical knowledge...',
+        color: '#22d3ee'
+      },
+      debate: {
+        className: 'message-debate',
+        usernameClass: 'username-debate',
+        badgeClass: 'badge-debate',
+        placeholder: 'Present your argument...',
+        color: '#dc2626'
+      }
+    };
+
+    // Translation Functions
+    async function translateText(text, targetLanguage) {
+      // Check cache first
+      const cacheKey = `${text}|${targetLanguage}`;
+      if (translationCache.has(cacheKey)) {
+        return translationCache.get(cacheKey);
+      }
+
+      try {
+        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `Translate the following text to ${languageNames[targetLanguage] || targetLanguage}. Only return the translated text without any additional comments or explanations:\n\n${text}`
+              }]
+            }]
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Translation API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const translatedText = data.candidates[0]?.content?.parts[0]?.text?.trim();
+        
+        if (translatedText) {
+          // Cache the translation
+          translationCache.set(cacheKey, translatedText);
+          return translatedText;
+        } else {
+          throw new Error('No translation received');
+        }
+      } catch (error) {
+        console.error('Translation error:', error);
+        return null;
+      }
+    }
+
+    async function translateMessage(messageElement, targetLanguage) {
+      const originalText = messageElement.dataset.originalText || messageElement.querySelector('.message-content').textContent;
+      const contentElement = messageElement.querySelector('.message-content');
+      
+      // Show loading state
+      const loadingIndicator = document.createElement('div');
+      loadingIndicator.className = 'translation-indicator loading-translation';
+      loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Translating...';
+      messageElement.appendChild(loadingIndicator);
+      
+      try {
+        const translatedText = await translateText(originalText, targetLanguage);
+        
+        if (translatedText) {
+          const isReplaceMode = !!localStorage.getItem('bookhive_default_language');
+          const indicator = document.createElement('div');
+          indicator.className = 'translation-indicator';
+          indicator.innerHTML = `<i class="fas fa-language"></i> Translated to ${languageNames[targetLanguage] || targetLanguage}`;
+
+          if (isReplaceMode) {
+            contentElement.textContent = translatedText;
+            contentElement.parentNode.insertBefore(indicator, contentElement.nextSibling);
+          } else {
+            contentElement.classList.add('original-text');
+            const translatedDiv = document.createElement('div');
+            translatedDiv.className = 'translated-text';
+            translatedDiv.textContent = translatedText;
+            contentElement.parentNode.insertBefore(translatedDiv, contentElement.nextSibling);
+            translatedDiv.appendChild(indicator);
+          }
+          
+          messageElement.dataset.translated = 'true';
+          messageElement.dataset.translatedTo = targetLanguage;
+        }
+      } catch (error) {
+        console.error('Translation failed:', error);
+        showNotification('Translation failed. Please try again.', 'error');
+      } finally {
+        loadingIndicator.remove();
+      }
+    }
+
+    async function translateAllVisibleMessages() {
+      if (!userLanguage) {
+        showNotification('Please select a target language first.', 'warning');
+        return;
+      }
+
+      const messages = document.querySelectorAll('#publicChatMessages .chat-message[data-translated!="true"]');
+      const translateBtn = document.getElementById('translateAllMessages');
+      
+      translateBtn.disabled = true;
+      translateBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Translating...';
+      
+      for (const message of messages) {
+        await translateMessage(message, userLanguage);
+        // Small delay to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      translateBtn.disabled = false;
+      translateBtn.innerHTML = '<i class="fas fa-sync mr-1"></i> Translate All';
+      
+      showNotification('All messages translated successfully!', 'success');
+    }
+
+    async function translateAllPrivateMessages() {
+      if (!userLanguage) {
+        showNotification('Please select a target language first.', 'warning');
+        return;
+      }
+      
+      const privateMessages = document.querySelectorAll('#privateChatMessages .chat-message[data-translated!="true"]');
+      const btn = document.getElementById('translatePrivateMessages');
+      
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      
+      for (const message of privateMessages) {
+        const messageContent = message.querySelector('.message-content');
+        if (messageContent) {
+          message.dataset.originalText = messageContent.textContent;
+          await translateMessage(message, userLanguage);
+        }
+        // Small delay to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-language"></i>';
+      
+      showNotification('All private messages translated successfully!', 'success');
+    }
+
+    function showNotification(message, type = 'info') {
+      const notification = document.createElement('div');
+      const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+      };
+      
+      notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2`;
+      notification.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'exclamation-triangle' : type === 'warning' ? 'exclamation' : 'info'}-circle"></i>
+        <span>${message}</span>
+        <button onclick="this.parentElement.remove()" class="ml-2 text-white hover:text-gray-200">
+          <i class="fas fa-times"></i>
+        </button>
+      `;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification);
+        }
+      }, 5000);
+    }
+
+    // Initialize translation settings
+    function initializeTranslation() {
+      const targetLanguageSelect = document.getElementById('targetLanguage');
+      const autoTranslateCheckbox = document.getElementById('autoTranslate');
+      
+      // Set saved preferences
+      if (userLanguage) {
+        targetLanguageSelect.value = userLanguage;
+      }
+      autoTranslateCheckbox.checked = autoTranslateEnabled;
+      
+      // Language selection handler
+      targetLanguageSelect.addEventListener('change', (e) => {
+        userLanguage = e.target.value;
+        localStorage.setItem('bookhive_user_language', userLanguage);
+        
+        if (userLanguage) {
+          showNotification(`Translation language set to ${languageNames[userLanguage]}`, 'success');
+        }
+      });
+      
+      // Auto-translate toggle
+      autoTranslateCheckbox.addEventListener('change', (e) => {
+        autoTranslateEnabled = e.target.checked;
+        localStorage.setItem('bookhive_auto_translate', autoTranslateEnabled);
+        
+        showNotification(
+          autoTranslateEnabled ? 'Auto-translation enabled' : 'Auto-translation disabled',
+          autoTranslateEnabled ? 'success' : 'info'
+        );
+      });
+      
+      // Set default language
+      document.getElementById('setDefaultLanguage').addEventListener('click', () => {
+        if (userLanguage) {
+          localStorage.setItem('bookhive_default_language', userLanguage);
+          showNotification(`${languageNames[userLanguage]} set as default language`, 'success');
+        } else {
+          showNotification('Please select a language first', 'warning');
+        }
+      });
+      
+      // Translate all messages
+      document.getElementById('translateAllMessages').addEventListener('click', translateAllVisibleMessages);
+      
+      // Individual message translation buttons
+      document.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('translate-message-btn') || e.target.parentElement.classList.contains('translate-message-btn')) {
+          const btn = e.target.classList.contains('translate-message-btn') ? e.target : e.target.parentElement;
+          const messageElement = btn.closest('.chat-message');
+          
+          if (!userLanguage) {
+            showNotification('Please select a target language first.', 'warning');
+            return;
+          }
+          
+          if (messageElement.dataset.translated === 'true') {
+            // Toggle back to original
+            const content = messageElement.querySelector('.message-content');
+            content.textContent = messageElement.dataset.originalText;
+            const indicator = messageElement.querySelector('.translation-indicator');
+            if (indicator) indicator.remove();
+            const translatedDiv = messageElement.querySelector('.translated-text');
+            if (translatedDiv) translatedDiv.remove();
+            content.classList.remove('original-text');
+            messageElement.dataset.translated = 'false';
+            btn.innerHTML = '<i class="fas fa-language text-sm"></i>';
+          } else {
+            await translateMessage(messageElement, userLanguage);
+            btn.innerHTML = '<i class="fas fa-language text-sm text-green-600"></i>';
+          }
+        }
+      });
+      
+      // Private chat translation
+      document.getElementById('translatePrivateMessages').addEventListener('click', translateAllPrivateMessages);
+    }
+
+    // Enhanced message styling function
+    function convertToStyle(message, style) {
+      const conversions = {
+        professional: (msg) => {
+          return msg.charAt(0).toUpperCase() + msg.slice(1) + 
+                 (msg.match(/[.!?]$/) ? '' : '.');
+        },
+        casual: (msg) => {
+          const casualWords = {
+            'excellent': 'awesome',
+            'wonderful': 'amazing',
+            'indeed': 'totally',
+            'however': 'but',
+            'therefore': 'so'
+          };
+          let result = msg;
+          Object.keys(casualWords).forEach(formal => {
+            result = result.replace(new RegExp(`\\b${formal}\\b`, 'gi'), casualWords[formal]);
+          });
+          const emojis = ['😊', '👍', '🎉', '💫', '✨'];
+          return result + ' ' + emojis[Math.floor(Math.random() * emojis.length)];
+        },
+        academic: (msg) => {
+          return `In consideration of the discourse at hand, I would posit that ${msg.toLowerCase()}. This perspective warrants further scholarly examination and peer review.`;
+        },
+        creative: (msg) => {
+          const metaphors = [
+            'like verses in an endless poem',
+            'as whispers carried by the wind',
+            'dancing through corridors of thought',
+            'painting colors in the mind\'s canvas'
+          ];
+          const randomMetaphor = metaphors[Math.floor(Math.random() * metaphors.length)];
+          return `${msg} — ${randomMetaphor} ✨`;
+        },
+        technical: (msg) => {
+          return `// ${msg}\n/* Implementation note: optimized for readability and performance */\nfunction processThought() { return "${msg.toLowerCase().replace(/[^a-z0-9]/g, '_')}"; }`;
+        },
+        debate: (msg) => {
+          return `I respectfully challenge the conventional wisdom and argue that ${msg.toLowerCase()}. The evidence clearly supports this position, and I invite counterarguments for rigorous intellectual discourse.`;
+        }
+      };
+      
+      return conversions[style] ? conversions[style](message) : message;
+    }
+
+    // Join profession chat on page load
+    socket.emit('joinProfession', {
+      userId: window.currentUserId,
+      profession: window.currentProfession
+    });
+
+    // Update active users
+    socket.on('updateActiveUsers', (count) => {
+      document.getElementById('activeUsers').textContent = count;
+    });
+
+    // Handle public chat messages
+    socket.on('chatHistory', (data) => {
+      const publicChatMessages = document.getElementById('publicChatMessages');
+      publicChatMessages.innerHTML = '';
+      data.messages.forEach(message => {
+        appendPublicMessage(message);
+      });
+      scrollToBottom('publicChatMessages');
+      if (autoTranslateEnabled && userLanguage) {
+        translateAllVisibleMessages();
+      }
+    });
+
+    socket.on('chatMessage', async (message) => {
+      appendPublicMessage(message);
+      
+      // Auto-translate if enabled and user has set a language
+      if (autoTranslateEnabled && userLanguage) {
+        const messageElement = document.querySelector(`#publicChatMessages .chat-message:last-child`);
+        if (messageElement) {
+          setTimeout(async () => {
+            await translateMessage(messageElement, userLanguage);
+          }, 500);
+        }
+      }
+      
+      scrollToBottom('publicChatMessages');
+    });
+
+    // Enhanced typing indicator
+    socket.on('userTyping', (data) => {
+      showTypingIndicator(data.username);
+    });
+
+    socket.on('userStoppedTyping', () => {
+      hideTypingIndicator();
+    });
+
+    // Handle private chat requests
+    socket.on('newChatRequest', (request) => {
+      const chatRequests = document.getElementById('chat-requests');
+      const requestElement = document.createElement('div');
+      requestElement.className = 'chat-request bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-lg shadow-sm fade-in border-l-4 border-green-500';
+      requestElement.dataset.requestId = request._id;
+      requestElement.innerHTML = `
+        <p class="font-semibold text-gray-800">Request from ${request.requester.username}</p>
+        <div class="flex gap-2 mt-3">
+          <button class="accept-request bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-1" data-request-id="${request._id}">
+            <i class="fas fa-check"></i> Accept
+          </button>
+          <button class="decline-request bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-1" data-request-id="${request._id}">
+            <i class="fas fa-times"></i> Decline
+          </button>
+        </div>
+      `;
+      chatRequests.appendChild(requestElement);
+      scrollToBottom('chat-requests');
+    });
+
+    socket.on('refreshChatRequests', () => {
+      window.location.reload();
+    });
+
+    socket.on('chatRequestAccepted', (data) => {
+      const chatRequests = document.getElementById('chat-requests');
+      const chatElement = document.createElement('div');
+      chatElement.className = 'chat-request bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg shadow-sm fade-in border-l-4 border-blue-500';
+      chatElement.innerHTML = `
+        <p class="font-semibold text-gray-800">Chat with ${data.recipientUsername}</p>
+        <button class="open-chat bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition mt-3 flex items-center gap-1 w-full justify-center" 
+                data-chat-id="${data.chatId}" data-recipient-id="${data.recipientId}">
+          <i class="fas fa-comments"></i> Open Chat
+        </button>
+      `;
+      chatRequests.appendChild(chatElement);
+      scrollToBottom('chat-requests');
+    });
+
+    socket.on('requestPrivateChatResponse', (data) => {
+      showNotification(data.message, data.success ? 'success' : 'error');
+      if (data.success) {
+        document.getElementById('privateChatRequestForm').classList.add('hidden');
+        document.getElementById('new-chat-request-btn').classList.remove('hidden');
+      }
+    });
+
+    socket.on('handleChatRequestResponse', (data) => {
+      showNotification(data.message, data.success ? 'success' : 'error');
+    });
+
+    // Handle private chat messages
+    socket.on('privateMessage', async (message) => {
+      if (document.getElementById('privateChatModal').dataset.chatId === message.chatId) {
+        appendPrivateMessage(message);
+        
+        // Auto-translate private messages if enabled
+        if (autoTranslateEnabled && userLanguage) {
+          const messageElement = document.querySelector('#privateChatMessages .chat-message:last-child');
+          if (messageElement) {
+            setTimeout(async () => {
+              await translateMessage(messageElement, userLanguage);
+            }, 500);
+          }
+        }
+        
+        scrollToBottom('privateChatMessages');
+      }
+    });
+
+    socket.on('privateMessageError', (data) => {
+      showNotification(data.message, 'error');
+    });
+
+    socket.on('getPrivateChatMessages', (data) => {
+      const privateChatMessages = document.getElementById('privateChatMessages');
+      privateChatMessages.innerHTML = '';
+      data.messages.forEach(message => {
+        appendPrivateMessage(message);
+      });
+      scrollToBottom('privateChatMessages');
+      if (autoTranslateEnabled && userLanguage) {
+        translateAllPrivateMessages();
+      }
+    });
+
+    // Enhanced helper functions
+    function appendPublicMessage(message) {
+      const publicChatMessages = document.getElementById('publicChatMessages');
+      const messageElement = document.createElement('div');
+      const messageStyle = message.style || 'professional';
+      const style = styles[messageStyle];
+      
+      messageElement.className = `chat-message ${style.className} bg-gray-50 p-4 rounded-lg shadow-sm`;
+      messageElement.dataset.messageId = message._id || Date.now();
+      messageElement.dataset.originalText = message.content;
+      messageElement.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <p class="font-semibold ${style.usernameClass}">${message.user.username}</p>
+            <span class="style-badge ${style.badgeClass}">${messageStyle}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="translate-message-btn text-gray-400 hover:text-green-600 transition" 
+                    data-message-id="${message._id || Date.now()}">
+              <i class="fas fa-language text-sm"></i>
+            </button>
+            <span class="message-timestamp text-gray-500">
+              ${new Date(message.timestamp).toLocaleString()}
+            </span>
+          </div>
+        </div>
+        <p class="text-gray-700 leading-relaxed message-content">${message.content}</p>
+      `;
+      publicChatMessages.appendChild(messageElement);
+      
+      // Trigger scroll after animation
+      setTimeout(() => scrollToBottom('publicChatMessages'), 100);
+    }
+
+    function appendPrivateMessage(message) {
+      const isSender = message.sender._id === window.currentUserId;
+      const privateChatMessages = document.getElementById('privateChatMessages');
+      const messageElement = document.createElement('div');
+      messageElement.className = `chat-message ${isSender ? 'bg-blue-100 text-right ml-8' : 'bg-gray-50 mr-8'} p-4 rounded-lg shadow-sm`;
+      messageElement.dataset.originalText = message.content;
+      messageElement.innerHTML = `
+        <div class="flex items-center justify-between">
+          <p class="font-semibold ${isSender ? 'text-blue-600' : 'text-gray-600'}">${isSender ? 'You' : message.sender.username}</p>
+          <span class="text-gray-500 text-sm">${new Date(message.timestamp).toLocaleString()}</span>
+        </div>
+        <p class="text-gray-700 mt-2 leading-relaxed message-content">${message.content}</p>
+      `;
+      privateChatMessages.appendChild(messageElement);
+    }
+
+    function scrollToBottom(elementId) {
+      const element = document.getElementById(elementId);
+      element.scrollTop = element.scrollHeight;
+    }
+
+    function showTypingIndicator(username) {
+      const indicator = document.getElementById('typingIndicator');
+      const userSpan = document.getElementById('typingUser');
+      userSpan.textContent = username;
+      indicator.style.display = 'flex';
+    }
+
+    function hideTypingIndicator() {
+      const indicator = document.getElementById('typingIndicator');
+      indicator.style.display = 'none';
+    }
+
+    // Event listeners
+    document.getElementById('publicChatForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('publicMessageInput');
+      const content = input.value.trim();
+      const selectedStyle = document.getElementById('messageStyle').value;
+      
+      if (content) {
+        // Show typing indicator
+        socket.emit('userTyping', { userId: window.currentUserId, username: 'You' });
+        
+        // Convert message based on style (only for display, send original)
+        const styledContent = convertToStyle(content, selectedStyle);
+        
+        socket.emit('chatMessage', {
+          userId: window.currentUserId,
+          profession: window.currentProfession,
+          content: styledContent,
+          style: selectedStyle,
+          originalContent: content
+        });
+        
+        input.value = '';
+        
+        // Hide typing indicator
+        setTimeout(() => {
+          socket.emit('userStoppedTyping', { userId: window.currentUserId });
+        }, 500);
+      }
+    });
+
+    // Style selector event listeners
+    document.querySelectorAll('[data-style]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        // Remove active class from all buttons
+        document.querySelectorAll('[data-style]').forEach(b => b.classList.remove('active'));
+        
+        // Add active class to clicked button
+        e.target.closest('[data-style]').classList.add('active');
+        
+        // Update current style
+        currentStyle = e.target.closest('[data-style]').dataset.style;
+        const style = styles[currentStyle];
+        
+        // Update UI elements
+        document.getElementById('currentStyle').textContent = 
+          currentStyle.charAt(0).toUpperCase() + currentStyle.slice(1);
+        document.getElementById('messageStyle').value = currentStyle;
+        document.getElementById('publicMessageInput').placeholder = style.placeholder;
+        
+        // Visual feedback
+        e.target.closest('[data-style]').style.transform = 'scale(1.1)';
+        setTimeout(() => {
+          e.target.closest('[data-style]').style.transform = 'scale(1)';
+        }, 200);
+      });
+    });
+
+    // Message style dropdown change
+    document.getElementById('messageStyle').addEventListener('change', (e) => {
+      const selectedStyle = e.target.value;
+      const style = styles[selectedStyle];
+      
+      // Update placeholder and current style display
+      document.getElementById('publicMessageInput').placeholder = style.placeholder;
+      document.getElementById('currentStyle').textContent = 
+        selectedStyle.charAt(0).toUpperCase() + selectedStyle.slice(1);
+      
+      // Update active style button
+      document.querySelectorAll('[data-style]').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.style === selectedStyle) {
+          btn.classList.add('active');
+        }
+      });
+      
+      currentStyle = selectedStyle;
+    });
+
+    // Style preview functionality
+    document.getElementById('stylePreview').addEventListener('click', () => {
+      const input = document.getElementById('publicMessageInput');
+      const content = input.value.trim();
+      const selectedStyle = document.getElementById('messageStyle').value;
+      const previewBox = document.getElementById('stylePreviewBox');
+      const previewMessage = document.getElementById('previewMessage');
+      const previewStyleName = document.getElementById('previewStyleName');
+      
+      if (content) {
+        const styledContent = convertToStyle(content, selectedStyle);
+        previewMessage.textContent = styledContent;
+        previewStyleName.textContent = selectedStyle.charAt(0).toUpperCase() + selectedStyle.slice(1);
+        previewBox.classList.remove('hidden');
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+          previewBox.classList.add('hidden');
+        }, 5000);
+      } else {
+        showNotification('Please type a message to preview', 'warning');
+      }
+    });
+
+    // Typing indicator for message input
+    let typingTimer;
+    document.getElementById('publicMessageInput').addEventListener('input', (e) => {
+      if (!isTyping) {
+        isTyping = true;
+        socket.emit('userTyping', { userId: window.currentUserId, username: 'You' });
+      }
+      
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => {
+        isTyping = false;
+        socket.emit('userStoppedTyping', { userId: window.currentUserId });
+      }, 1000);
+    });
+
+    // Private chat form submission
+    document.getElementById('privateChatRequestForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const recipientId = document.getElementById('recipientSelect').value;
+      if (recipientId) {
+        socket.emit('requestPrivateChat', {
+          requesterId: window.currentUserId,
+          recipientId
+        });
+      }
+    });
+
+    document.getElementById('privateChatForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('privateMessageInput');
+      const content = input.value.trim();
+      const chatId = document.getElementById('privateChatModal').dataset.chatId;
+      const recipientId = document.getElementById('privateChatModal').dataset.recipientId;
+      
+      if (content && chatId) {
+        socket.emit('privateMessage', {
+          senderId: window.currentUserId,
+          recipientId,
+          content,
+          chatId
+        });
+        input.value = '';
+      }
+    });
+
+    // Private chat controls
+    document.getElementById('new-chat-request-btn').addEventListener('click', () => {
+      document.getElementById('privateChatRequestForm').classList.remove('hidden');
+      document.getElementById('new-chat-request-btn').classList.add('hidden');
+    });
+
+    document.getElementById('cancel-request-btn').addEventListener('click', () => {
+      document.getElementById('privateChatRequestForm').classList.add('hidden');
+      document.getElementById('new-chat-request-btn').classList.remove('hidden');
+    });
+
+    document.getElementById('closeChatModal').addEventListener('click', () => {
+      document.getElementById('privateChatModal').classList.add('hidden');
+      document.getElementById('privateChatModal').dataset.chatId = '';
+      document.getElementById('privateChatModal').dataset.recipientId = '';
+      document.getElementById('privateChatMessages').innerHTML = '';
+    });
+
+    // Enhanced click handlers with better UX
+    document.addEventListener('click', (e) => {
+      // Accept request
+      if (e.target.classList.contains('accept-request') || e.target.parentElement.classList.contains('accept-request')) {
+        const requestId = e.target.dataset.requestId || e.target.parentElement.dataset.requestId;
+        const button = e.target.classList.contains('accept-request') ? e.target : e.target.parentElement;
+        
+        // Visual feedback
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...';
+        button.disabled = true;
+        
+        socket.emit('handleChatRequest', { requestId, action: 'accept' });
+      } 
+      // Decline request
+      else if (e.target.classList.contains('decline-request') || e.target.parentElement.classList.contains('decline-request')) {
+        const requestId = e.target.dataset.requestId || e.target.parentElement.dataset.requestId;
+        const button = e.target.classList.contains('decline-request') ? e.target : e.target.parentElement;
+        
+        // Visual feedback
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Declining...';
+        button.disabled = true;
+        
+        socket.emit('handleChatRequest', { requestId, action: 'decline' });
+      } 
+      // Open chat
+      else if (e.target.classList.contains('open-chat') || e.target.parentElement.classList.contains('open-chat')) {
+        const chatId = e.target.dataset.chatId || e.target.parentElement.dataset.chatId;
+        const recipientId = e.target.dataset.recipientId || e.target.parentElement.dataset.recipientId;
+        const recipientUsername = e.target.closest('.chat-request').querySelector('p').textContent.replace('Chat with ', '');
+        
+        document.getElementById('privateChatModal').dataset.chatId = chatId;
+        document.getElementById('privateChatModal').dataset.recipientId = recipientId;
+        document.getElementById('chatRecipient').textContent = recipientUsername;
+        document.getElementById('privateChatModal').classList.remove('hidden');
+        
+        socket.emit('getPrivateChatMessages', chatId, (data) => {
+          const privateChatMessages = document.getElementById('privateChatMessages');
+          privateChatMessages.innerHTML = '';
+          data.messages.forEach(message => {
+            appendPrivateMessage(message);
+          });
+          scrollToBottom('privateChatMessages');
+        });
+      }
+    });
+
+    // Keyboard shortcuts for styles
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        const number = parseInt(e.key);
+        const styleKeys = ['professional', 'casual', 'academic', 'creative', 'technical', 'debate'];
+        
+        if (number >= 1 && number <= 6) {
+          e.preventDefault();
+          const targetStyle = styleKeys[number - 1];
+          const styleBtn = document.querySelector(`[data-style="${targetStyle}"]`);
+          if (styleBtn) {
+            styleBtn.click();
+          }
+        }
+      }
+    });
+
+    // Enhanced message input with style hints
+    document.getElementById('publicMessageInput').addEventListener('focus', (e) => {
+      const style = styles[currentStyle];
+      e.target.style.borderColor = style.color;
+      e.target.style.boxShadow = `0 0 10px ${style.color}40`;
+    });
+
+    document.getElementById('publicMessageInput').addEventListener('blur', (e) => {
+      e.target.style.borderColor = '';
+      e.target.style.boxShadow = '';
+    });
+
+    // Enhanced error handling
+    socket.on('error', (error) => {
+      console.error('Socket error:', error);
+      showNotification('Connection issue. Please refresh the page.', 'error');
+    });
+
+    // Initialize all features
+    document.addEventListener('DOMContentLoaded', () => {
+      // Initialize translation system
+      initializeTranslation();
+      
+      // Initialize default style
+      const defaultStyle = styles[currentStyle];
+      document.getElementById('publicMessageInput').placeholder = defaultStyle.placeholder;
+      document.getElementById('currentStyle').textContent = 'Professional';
+      
+      // Load default language if set
+      const defaultLanguage = localStorage.getItem('bookhive_default_language');
+      if (defaultLanguage && !userLanguage) {
+        document.getElementById('targetLanguage').value = defaultLanguage;
+        userLanguage = defaultLanguage;
+        showNotification(`Default language (${languageNames[defaultLanguage]}) loaded`, 'info');
+      }
+
+      // Auto-translate public messages on load if enabled
+      if (autoTranslateEnabled && userLanguage) {
+        translateAllVisibleMessages();
+      }
+      
+      // Add loading animation to buttons
+      document.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', function() {
+          if (!this.classList.contains('loading') && !this.disabled) {
+            this.classList.add('loading');
+            setTimeout(() => {
+              this.classList.remove('loading');
+            }, 1000);
+          }
+        });
+      });
+      
+      console.log('BookHive Community Chat with Translation initialized!');
+    });
+
+    // Utility functions for better UX
+    function smoothScrollToBottom(elementId) {
+      const element = document.getElementById(elementId);
+      element.scrollTo({
+        top: element.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+
+    // Clear translation cache periodically to prevent memory issues
+    setInterval(() => {
+      if (translationCache.size > 1000) {
+        const entries = Array.from(translationCache.entries());
+        const half = Math.floor(entries.length / 2);
+        translationCache.clear();
+        // Keep most recent translations
+        entries.slice(half).forEach(([key, value]) => {
+          translationCache.set(key, value);
+        });
+        console.log('Translation cache cleared and optimized');
+      }
+    }, 300000); // Clean every 5 minutes
+
+    // Handle page visibility for better performance
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        // Pause auto-translation when tab is not visible
+        autoTranslateEnabled = false;
+      } else {
+        // Resume auto-translation based on user preference
+        autoTranslateEnabled = localStorage.getItem('bookhive_auto_translate') === 'true';
+      }
+    });
+
+    // Export functions for debugging (development only)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      window.bookHiveDebug = {
+        translateText,
+        translateMessage,
+        translationCache,
+        showNotification,
+        userLanguage,
+        autoTranslateEnabled
+      };
+      console.log('Debug functions available in window.bookHiveDebug');
+    }
+  </script>
+  <%- include('partials/chatbot') %>
+  
+  <script src="/js/chatbot.js"></script>
+</body>
+</html>

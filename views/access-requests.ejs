@@ -1,0 +1,128 @@
+<!-- views/access-requests.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Access Requests - MyLibrary</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="logo-section">
+        <a href="/">
+          <img src="/images/logo-removebg-preview.png" alt="BookHive Logo" class="logo">
+        </a>
+      </div>
+      <nav class="nav-menu">
+          <a href="/access-requests" class="nav-link active"><i class="fas fa-access-requests"></i> Access Requests</a>
+          <a href="/my-requests" class="nav-link"><i class="fas fa-my-requests"></i> My Requests</a>
+          <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
+          <!-- <a href="/account" class="nav-link"><i class="fas fa-user"></i> Account</a> -->
+          <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+      </nav>
+  </header>
+  
+  <main class="container">
+    <h2>Pending Access Requests</h2>
+
+    <!-- <div class="notes-container">
+      <div class="notes-toggle">✏️</div>
+      <div class="notes-area">
+        <div id="notesText" class="content-editable" contenteditable="true" placeholder="Write your notes here..."><%- note %></div>
+      </div>
+    </div> -->
+
+    <% if (requests.length === 0) { %>
+      <div class="empty-state">
+        <p>You don't have any pending access requests.</p>
+      </div>
+    <% } else { %>
+      <div class="requests-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Book</th>
+              <th>Requested By</th>
+              <th>Request Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% requests.forEach(request => { %>
+              <tr data-request-id="<%= request._id %>">
+                <td><%= request.book ? request.book.title : 'Unknown Book' %></td>
+                <td>
+                  <%= request.requestedBy ? request.requestedBy.username : 'Unknown User' %>
+                  <span class="email">(<%= request.requestedBy ? request.requestedBy.email : '' %>)</span>
+                </td>
+                <td><%= new Date(request.requestDate).toLocaleDateString() %></td>
+                <td class="action-buttons">
+                  <button class="btn btn-small btn-primary handle-request" data-action="approve">Approve</button>
+                  <button class="btn btn-small btn-danger handle-request" data-action="decline">Decline</button>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </main>
+  
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 MyLibrary. All rights reserved.</p>
+    </div>
+  </footer>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const actionButtons = document.querySelectorAll('.handle-request');
+      
+      actionButtons.forEach(button => {
+        button.addEventListener('click', async (e) => {
+          const action = e.target.dataset.action;
+          const requestRow = e.target.closest('tr');
+          const requestId = requestRow.dataset.requestId;
+          
+          try {
+            const response = await fetch(`/handle-request/${requestId}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ action })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+              // Remove the row from the table
+              requestRow.remove();
+              
+              // Show empty state if no more requests
+              if (document.querySelectorAll('tbody tr').length === 0) {
+                document.querySelector('.requests-table').innerHTML = `
+                  <div class="empty-state">
+                    <p>You don't have any pending access requests.</p>
+                  </div>
+                `;
+              }
+              
+              alert(`Request ${action}d successfully`);
+            } else {
+              alert(data.message || 'Failed to process request');
+            }
+          } catch (err) {
+            console.error('Error:', err);
+            alert('An error occurred');
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>
