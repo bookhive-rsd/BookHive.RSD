@@ -343,7 +343,7 @@ app.use((req, res, next) => {
     if (now - lastActivity > SESSION_TIMEOUT) {
       req.session.destroy(() => {
         res.clearCookie('connect.sid');
-        return res.redirect('/login');
+        return res.redirect('/');
       });
     } else {
       req.session.lastActivity = now;
@@ -511,7 +511,7 @@ const isAuthenticated = (req, res, next) => {
   if (req.session.userId || req.isAuthenticated()) {
     return next();
   }
-  res.redirect('/login');
+  res.redirect('/');
 };
 
 // Admin authentication middleware
@@ -754,14 +754,14 @@ app.get('/auth/google', (req, res, next) => {
 
 app.get('/auth/google/callback', (req, res, next) => {
   console.log('Google OAuth callback, protocol:', req.protocol, 'host:', req.get('host'), 'session:', req.session);
-  passport.authenticate('google', { failureRedirect: '/login' }, (err, user) => {
+  passport.authenticate('google', { failureRedirect: '/' }, (err, user) => {
     if (err) {
       console.error('Google OAuth callback error:', err);
-      return res.redirect('/login');
+      return res.redirect('/');
     }
     if (!user) {
       console.error('No user returned from Google OAuth');
-      return res.redirect('/login');
+      return res.redirect('/');
     }
     req.session.userId = user._id;
     req.session.lastActivity = Date.now();
@@ -931,7 +931,7 @@ app.post('/signup', async (req, res) => {
     } catch (emailErr) {
       console.error(`Error sending welcome email to ${newUser.email}:`, emailErr);
     }
-    res.redirect('/login');
+    res.redirect('/');
   } catch (err) {
     console.error('Signup error:', err);
     res.status(500).render('signup', { error: 'Server error', user: req.user, note: req.note ? req.note.content : '' });
@@ -976,7 +976,7 @@ app.get('/logout', (req, res) => {
       return res.status(500).send('Failed to logout');
     }
     res.clearCookie('connect.sid');
-    res.redirect('/login');
+    res.redirect('/');
   });
 });
 
