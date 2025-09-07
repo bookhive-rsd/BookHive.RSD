@@ -319,15 +319,41 @@
     .btn-danger:hover {
       background-color: #c82333;
     }
+    .welcome-text {
+      color: white;
+      font-size: 1.0rem;
+      font-weight: 600;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 1.5);
+      animation: bouncingText 2s infinite; /* Applying the animation */
+      font-family: 'Poppins', sans-serif;
+      text-decoration: none;
+    }
+    .welcome-link {
+      text-decoration: none;
+    }
+    @keyframes bouncingText {
+        0%, 20%, 50%, 80%, 100% {
+            transform: translateY(0);
+        }
+        40% {
+            transform: translateY(-20px);
+        }
+        60% {
+            transform: translateY(-10px);
+        }
+    }
   </style>
 </head>
 <body>
   <header class="header">
     <div class="container">
       <div class="logo-section">
-        <a href="/">
-          <img src="/images/logo-removebg-preview.png" alt="BookHive Logo" class="logo">
-        </a>
+          <a href="/">
+              <img src="/images/logo-removebg-preview.png" alt="BookHive Logo" class="logo">
+          </a>
+          <a href="/images/logo-removebg-preview.png" class="welcome-link">
+            <div class="welcome-text">Welcome to BookHive, <%= user.username %></div>
+          </a>
       </div>
       <nav class="nav-menu">
         <a href="/applications" class="nav-link"><i class="fas fa-th"></i> Applications</a>
@@ -1413,5 +1439,44 @@
       attachEventListeners();
     });
   </script>
+    <!-- <script>
+        // Get the container where the animated text will be placed
+        const container = document.getElementById('animated-text-container');
+        
+        // Define the parts of the message with their text, style, and optional emoji
+        const messages = [
+            { text: "Welcome to BookHive, <%= user.username %>", colors: ["#007bff", "#dc3545", "#28a745", "#ffc107", "#6f42c1"] },
+            { text: "BookHive में आपका स्वागत है, <%= user.username %>", colors: ["#28a745", "#6f42c1", "#dc3545", "#007bff", "#ffc107"] },
+            { text: "BookHive-க்கு வரவேற்கிறோம், <%= user.username %>", colors: ["#ffc107", "#28a745", "#007bff", "#dc3545", "#6f42c1"] },
+            { text: "BookHive ಗೆ ಸುಸ್ವಾಗತ, <%= user.username %>", colors: ["#dc3545", "#6f42c1", "#ffc107", "#28a745", "#007bff"] },
+            { text: "BookHive కు స్వాగతం, <%= user.username %>", colors: ["#6f42c1", "#ffc107", "#007bff", "#dc3545", "#28a745"] },
+            { text: "BookHive-ലേക്ക് സ്വാഗതം, <%= user.username %>", colors: ["#007bff", "#28a745", "#dc3545", "#6f42c1", "#ffc107"] },
+        ];
+
+        let messageIndex = 0;
+
+        function animateMessage(message) {
+            container.innerHTML = ''; // Clear previous message
+            const words = message.text.split(' ');
+            words.forEach((word, index) => {
+                const span = document.createElement('span');
+                span.textContent = word;
+                span.classList.add('animated-word');
+                span.style.color = message.colors[index % message.colors.length];
+                span.style.animationDelay = `${index * 0.1}s`;
+                container.appendChild(span);
+                container.appendChild(document.createTextNode(' '));
+            });
+        }
+
+        // Initially display the first message
+        animateMessage(messages[messageIndex]);
+
+        // Set an interval to change the message and re-animate it
+        setInterval(() => {
+            messageIndex = (messageIndex + 1) % messages.length;
+            animateMessage(messages[messageIndex]);
+        }, 3000); // Change language every 3 seconds
+    </script> -->
 </body>
 </html>
