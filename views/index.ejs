@@ -451,6 +451,76 @@
       width: 100%;
     }
 
+    /* Login and Signup Modals */
+    .login-modal, .signup-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+    }
+
+    .login-content, .signup-content {
+      background: #eeeaea;
+      width: 60%;
+      max-width: 450px;
+      margin: 90px auto;
+      padding: 15px;
+      border-radius: 13px;
+      position: relative;
+    }
+
+    .close-login, .close-signup {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    /* Styles from login/signup */
+    .google-btn-container {
+      display: flex;
+      justify-content: center;
+      margin: 20px 0;
+    }
+    .or-divider {
+      text-align: center;
+      margin: 20px 0;
+      color: #666;
+      position: relative;
+    }
+    .or-divider::before,
+    .or-divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 45%;
+      height: 1px;
+      background: #ccc;
+    }
+    .or-divider::before {
+      left: 0;
+    }
+    .or-divider::after {
+      right: 0;
+    }
+    .btn {
+      display: inline-block;
+      padding: 0.5rem 0.6rem;
+      border-radius: 4px;
+      text-decoration: none;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.3s, transform 0.2s;
+      border: none;
+      font-size: 1.0rem;
+      background-color: dodgerblue;
+    }
+
     /* Responsive Design */
     @media (max-width: 768px) {
       .header .container {
@@ -511,6 +581,29 @@
         height: 120px;
       }
     }
+    .welcome-text {
+      color: white;
+      font-size: 1.0rem;
+      font-weight: 600;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 1.5);
+      animation: bouncingText 2s infinite; /* Applying the animation */
+      font-family: 'Poppins', sans-serif;
+      text-decoration: none;
+    }
+    .welcome-link {
+      text-decoration: none;
+    }
+    @keyframes bouncingText {
+        0%, 20%, 50%, 80%, 100% {
+            transform: translateY(0);
+        }
+        40% {
+            transform: translateY(-20px);
+        }
+        60% {
+            transform: translateY(-10px);
+        }
+    }
   </style>
 </head>
 <body>
@@ -521,6 +614,11 @@
         <a href="/">
           <img src="/images/logo-removebg-preview.png" alt="BookHive Logo" class="logo">
         </a>
+        <% if (user) { %>
+          <a href="/images/logo-removebg-preview.png" class="welcome-link">
+            <div class="welcome-text">Welcome to BookHive, <%= user.username %></div>
+          </a>
+        <% } %>
       </div>
       <nav class="nav-menu">
         <% if (user) { %>
@@ -532,8 +630,8 @@
           <!-- <a href="/account" class="nav-link"><i class="fas fa-user"></i> Account</a> -->
           <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
         <% } else { %>
-          <a href="/login" class="nav-link"><i class="fas fa-sign-in-alt"></i> Login</a>
-          <a href="/signup" class="nav-link btn-nav-signup"><i class="fas fa-user-plus"></i> Sign Up</a>
+          <a href="#" class="nav-link" id="loginLink"><i class="fas fa-sign-in-alt"></i> Login</a>
+          <a href="#" class="nav-link btn-nav-signup" id="signupLink"><i class="fas fa-user-plus"></i> Sign Up</a>
         <% } %>
       </nav>
       <div class="hamburger">
@@ -550,8 +648,8 @@
         <p>Your ultimate digital library to upload, organize, share, and read books seamlessly.</p>
         <div class="cta-buttons">
           <% if (!user) { %>
-            <a href="/signup" class="btn btn-primary">Get Started Now</a>
-            <a href="/login" class="btn btn-secondary">Login</a>
+            <a href="#" class="btn btn-primary" id="getStarted">Get Started Now</a>
+            <a href="#" class="btn btn-secondary" id="loginBtn">Login</a>
           <% } else { %>
             <a href="/bookhive" class="btn btn-primary">BookHive Library</a>
           <% } %>
@@ -663,7 +761,7 @@
       <h2>Join BookHive Today</h2>
       <p>Start your journey with a vibrant community of book lovers.</p>
       <% if (!user) { %>
-        <a href="/signup" class="btn btn-primary">Sign Up Free</a>
+        <a href="#" class="btn btn-primary" id="signupFree">Sign Up Free</a>
       <% } else { %>
         <a href="/library" class="btn btn-primary">Go to Your Library</a>
       <% } %>
@@ -716,6 +814,77 @@
     </div>
   <% } %>
 
+  <% if (!user) { %>
+    <!-- Login Modal -->
+    <div class="login-modal" id="loginModal">
+      <div class="login-content">
+        <span class="close-login">×</span>
+        <h2>Login to Your Account</h2>
+        <div class="google-btn-container">
+          <a href="/auth/google" class="btn btn-google">
+            <img src="/images/GoogleLogo.jpg" alt="Google Logo" style="width: 20px; vertical-align: middle; margin-right: 10px;">
+            Sign In with Google
+          </a>
+        </div>
+        <div class="or-divider">OR</div>
+        <form action="/login" method="POST">
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required>
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Login</button>
+        </form>
+        <p class="form-footer">
+          Don't have an account? <a href="#" id="showSignup">Sign Up</a>
+        </p>
+      </div>
+    </div>
+
+    <!-- Signup Modal -->
+    <div class="signup-modal" id="signupModal">
+      <div class="signup-content">
+        <span class="close-signup">×</span>
+        <h2>Create an Account</h2>
+        <div class="google-btn-container">
+          <a href="/auth/google" class="btn btn-google">
+            <img src="/images/GoogleLogo.jpg" alt="Google Logo" style="width: 20px; vertical-align: middle; margin-right: 10px;">
+            Sign Up with Google
+          </a>
+        </div>
+        <div class="or-divider">OR</div>
+        <form action="/signup" method="POST">
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required>
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+          </div>
+          <div class="form-group">
+            <label for="profession">Profession</label>
+            <select id="profession" name="profession" required>
+              <option value="" disabled selected>Select your profession</option>
+              <option value="BookHive">BookHive</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary">Sign Up</button>
+        </form>
+        <p class="form-footer">
+          Already have an account? <a href="#" id="showLogin">Login</a>
+        </p>
+      </div>
+    </div>
+  <% } %>
+
   <!-- JavaScript -->
   <script>
     // Hamburger Menu Toggle
@@ -763,6 +932,77 @@
         }
       })
       .catch(err => console.error('Error saving notes:', err));
+    });
+  </script>
+  <% } %>
+  <% if (!user) { %>
+  <script>
+    // Login and Signup Modal Functionality
+    const loginModal = document.getElementById('loginModal');
+    const signupModal = document.getElementById('signupModal');
+    const closeLogin = document.querySelector('.close-login');
+    const closeSignup = document.querySelector('.close-signup');
+
+    function showLogin() {
+      loginModal.style.display = 'block';
+    }
+
+    function showSignup() {
+      signupModal.style.display = 'block';
+    }
+
+    closeLogin.addEventListener('click', () => {
+      loginModal.style.display = 'none';
+    });
+
+    closeSignup.addEventListener('click', () => {
+      signupModal.style.display = 'none';
+    });
+
+    window.addEventListener('click', (e) => {
+      if (e.target === loginModal) {
+        loginModal.style.display = 'none';
+      }
+      if (e.target === signupModal) {
+        signupModal.style.display = 'none';
+      }
+    });
+
+    document.getElementById('loginLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      showLogin();
+    });
+
+    document.getElementById('signupLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      showSignup();
+    });
+
+    document.getElementById('getStarted').addEventListener('click', (e) => {
+      e.preventDefault();
+      showSignup();
+    });
+
+    document.getElementById('loginBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      showLogin();
+    });
+
+    document.getElementById('signupFree').addEventListener('click', (e) => {
+      e.preventDefault();
+      showSignup();
+    });
+
+    document.getElementById('showSignup').addEventListener('click', (e) => {
+      e.preventDefault();
+      loginModal.style.display = 'none';
+      showSignup();
+    });
+
+    document.getElementById('showLogin').addEventListener('click', (e) => {
+      e.preventDefault();
+      signupModal.style.display = 'none';
+      showLogin();
     });
   </script>
   <% } %>
