@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-g">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BookHive Features & Policies Infographic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 280px;
+            max-height: 320px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 320px;
+                max-height: 360px;
+            }
+        }
+        .icon-circle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            font-size: 1.75rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease-in-out;
+        }
+        .guideline-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            font-size: 1.1rem;
+        }
+        .guideline-icon {
+            margin-right: 0.75rem;
+            flex-shrink: 0;
+        }
+        .card {
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #00796B;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-[#E0F7FA] to-[#B2EBF2] text-[#1E293B]">
+
+    <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+
+        <header class="text-center mb-16 fade-in">
+            <h1 class="text-5xl md:text-6xl font-extrabold text-[#00796B] mb-3">Welcome to BookHive</h1>
+            <p class="text-xl text-gray-700 max-w-3xl mx-auto">Explore the features, guidelines, and security that make our community thrive.</p>
+        </header>
+        
+        <main>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-8">
+
+                <div class="md:col-span-2 card rounded-xl shadow-lg p-8 flex flex-col justify-center items-center text-center fade-in" style="animation-delay: 0.2s;">
+                    <h2 class="text-3xl font-bold text-[#004D40] mb-3">Your Digital Library Awaits</h2>
+                    <p class="text-gray-600 mb-6">Every user gets a generous personal library to start their collection.</p>
+                    <div class="text-8xl font-extrabold text-[#00796B]">500</div>
+                    <div class="text-2xl text-gray-800 font-semibold tracking-wide">MB FREE STORAGE</div>
+                </div>
+
+                <div class="md:col-span-3 card rounded-xl shadow-lg p-8 fade-in" style="animation-delay: 0.4s;">
+                    <h2 class="text-3xl font-bold text-center text-[#004D40] mb-2">Track Your Storage</h2>
+                    <p class="text-gray-600 text-center mb-6">Manage your 500MB space for PDF documents, with individual files up to 500MB.</p>
+                    <div class="chart-container">
+                        <canvas id="storageChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="md:col-span-5 card rounded-xl shadow-lg p-8 fade-in" style="animation-delay: 0.6s;">
+                    <h2 class="text-3xl font-bold text-center text-[#004D40] mb-2">A Vibrant Community</h2>
+                    <p class="text-gray-600 text-center mb-6">Engage with fellow readers through publications, comments, likes, and private messages.</p>
+                    <div class="h-80 w-full max-w-4xl mx-auto">
+                        <canvas id="communityChart"></canvas>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="mt-16 card rounded-xl shadow-lg p-8 fade-in" style="animation-delay: 0.8s;">
+                <h2 class="text-3xl font-bold text-center text-[#004D40] mb-2">Share With Confidence</h2>
+                <p class="text-gray-600 text-center max-w-3xl mx-auto mb-10">You have complete control over your document's visibility. Choose the right privacy level for every file.</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+                    <div class="transform hover:scale-105 transition-transform duration-300">
+                         <div class="icon-circle bg-red-400 text-white mx-auto">🔒</div>
+                        <h3 class="text-2xl font-bold mb-2">Private</h3>
+                        <p class="text-gray-600">The default setting for maximum privacy. Only you can view the document.</p>
+                    </div>
+                    <div class="transform hover:scale-105 transition-transform duration-300">
+                        <div class="icon-circle bg-yellow-400 text-white mx-auto">🌍</div>
+                        <h3 class="text-2xl font-bold mb-2">Public</h3>
+                        <p class="text-gray-600">Any logged-in BookHive user can discover and view your document.</p>
+                    </div>
+                    <div class="transform hover:scale-105 transition-transform duration-300">
+                        <div class="icon-circle bg-teal-400 text-white mx-auto">👥</div>
+                        <h3 class="text-2xl font-bold mb-2">Restricted</h3>
+                        <p class="text-gray-600">Grant access to specific users upon their request while keeping it hidden from others.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-16 card rounded-xl shadow-lg p-8 fade-in" style="animation-delay: 1s;">
+                <h2 class="text-3xl font-bold text-center text-[#004D40] mb-10">Our Commitment to Your Safety</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
+                    <div class="flex flex-col items-center">
+                        <div class="icon-circle bg-teal-500 text-white">🛡️</div>
+                        <h3 class="text-2xl font-bold mb-2">Account Security</h3>
+                        <ul class="text-left list-none space-y-2 text-gray-600">
+                            <li>✔️ Strong Password Encryption</li>
+                            <li>✔️ Secure Google OAuth Option</li>
+                            <li>✔️ 30-Min Inactivity Logout</li>
+                        </ul>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="icon-circle bg-red-500 text-white">🔍</div>
+                        <h3 class="text-2xl font-bold mb-2">Content Security</h3>
+                        <ul class="text-left list-none space-y-2 text-gray-600">
+                            <li>✔️ Malicious Code Sanitization</li>
+                            <li>✔️ Automatic Adult Content Scan</li>
+                            <li>✔️ Secure AI Query Processing</li>
+                        </ul>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="icon-circle bg-yellow-500 text-white">🤫</div>
+                        <h3 class="text-2xl font-bold mb-2">Privacy Control</h3>
+                        <ul class="text-left list-none space-y-2 text-gray-600">
+                            <li>✔️ Full Control Over Your Data</li>
+                            <li>✔️ Manage Document Visibility</li>
+                            <li>✔️ Permanent Account Deletion</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-16 card rounded-xl shadow-lg p-8 fade-in" style="animation-delay: 1.2s;">
+                 <h2 class="text-3xl font-bold text-center text-[#004D40] mb-10">Platform Guidelines</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    <div>
+                        <h3 class="text-2xl font-bold text-red-500 mb-4 text-center">Prohibited Content</h3>
+                        <div class="space-y-3 text-gray-700">
+                            <div class="guideline-item"><span class="guideline-icon text-red-500">❌</span><span>No sexually explicit material.</span></div>
+                            <div class="guideline-item"><span class="guideline-icon text-red-500">❌</span><span>No hateful or threatening content.</span></div>
+                            <div class="guideline-item"><span class="guideline-icon text-red-500">❌</span><span>No copyright infringement.</span></div>
+                             <div class="guideline-item"><span class="guideline-icon text-red-500">❌</span><span>No viruses or malicious code.</span></div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold text-teal-500 mb-4 text-center">Community Conduct</h3>
+                        <div class="space-y-3 text-gray-700">
+                           <div class="guideline-item"><span class="guideline-icon text-teal-500">✔️</span><span>Be respectful and courteous.</span></div>
+                           <div class="guideline-item"><span class="guideline-icon text-teal-500">✔️</span><span>Do not harass, bully, or intimidate.</span></div>
+                           <div class="guideline-item"><span class="guideline-icon text-teal-500">✔️</span><span>No spam or unauthorized ads.</span></div>
+                           <div class="guideline-item"><span class="guideline-icon text-teal-500">✔️</span><span>Engage in constructive discussions.</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="gemini-feature" class="mt-16 card rounded-xl shadow-lg p-8 fade-in" style="animation-delay: 1.4s;">
+                <h2 class="text-3xl font-bold text-center text-[#004D40] mb-3">✨ Ask Our AI a Question</h2>
+                <p class="text-gray-600 text-center max-w-2xl mx-auto mb-6">Have a question about our features or security? Get an instant answer from our Gemini-powered assistant.</p>
+                <form id="ai-form" class="max-w-xl mx-auto">
+                    <div class="flex items-center bg-white rounded-full shadow-inner p-2">
+                        <input id="ai-query" type="text" placeholder="e.g., How does content scanning work?" class="w-full bg-transparent p-2 text-lg text-gray-700 focus:outline-none">
+                        <button id="ai-submit-btn" type="submit" class="bg-[#00796B] text-white rounded-full p-3 hover:bg-[#004D40] transition-colors duration-300 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                        </button>
+                    </div>
+                </form>
+                <div id="ai-response-container" class="mt-6 max-w-xl mx-auto">
+                    <div id="ai-loader" class="hidden loader mx-auto"></div>
+                    <div id="ai-response" class="bg-teal-50 border border-teal-200 rounded-lg p-4 text-teal-800 text-base"></div>
+                </div>
+            </div>
+
+        </main>
+        
+        <footer class="text-center mt-16 pt-8 border-t border-gray-300 fade-in" style="animation-delay: 1.6s;">
+            <p class="text-gray-700">Have questions? Contact us at <a href="mailto:bookhive.rsd@gmail.com" class="text-[#00796B] font-semibold hover:underline">bookhive.rsd@gmail.com</a></p>
+            <p class="text-sm text-gray-600 mt-2">© 2025 BookHive. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('fade-in');
+                    }
+                });
+            }, { threshold: 0.1 });
+
+            document.querySelectorAll('.card').forEach(card => {
+                card.style.opacity = '0'; 
+                observer.observe(card);
+            });
+
+            const energeticPalette = {
+                coral: '#EF5350',
+                turquoise: '#4DB6AC',
+                blue: '#42A5F5',
+                yellow: '#FFCA28',
+                dark: '#263238'
+            };
+
+            const chartTooltipOptions = {
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                const item = tooltipItems[0];
+                                let label = item.chart.data.labels[item.dataIndex];
+                                return Array.isArray(label) ? label.join(' ') : label;
+                            }
+                        },
+                        bodyFont: { family: "'Poppins', sans-serif", size: 14 },
+                        titleFont: { family: "'Poppins', sans-serif", size: 16, weight: 'bold' },
+                        padding: 12,
+                        cornerRadius: 8,
+                        displayColors: false,
+                    },
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            font: { family: "'Poppins', sans-serif", size: 14 },
+                            padding: 20,
+                        }
+                    }
+                }
+            };
+            
+            function renderStorageChart() {
+                const ctx = document.getElementById('storageChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Storage Used (MB)', 'Storage Free (MB)'],
+                        datasets: [{
+                            label: 'Storage Usage',
+                            data: [125, 375],
+                            backgroundColor: [energeticPalette.coral, energeticPalette.turquoise],
+                            borderColor: ['#FFFFFF'],
+                            borderWidth: 5,
+                            hoverOffset: 12
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '75%',
+                        ...chartTooltipOptions,
+                        animation: {
+                            animateRotate: true,
+                            animateScale: true,
+                            duration: 1500
+                        }
+                    }
+                });
+            }
+
+            function renderCommunityChart() {
+                const ctx = document.getElementById('communityChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Publications', 'Comments', 'Likes', 'Messages'],
+                        datasets: [{
+                            label: 'Community Interactions (Sample Data)',
+                            data: [500, 1200, 3500, 800],
+                            backgroundColor: 'rgba(0, 121, 107, 0.7)',
+                            borderColor: 'rgba(0, 121, 107, 1)',
+                            borderWidth: 2,
+                            borderRadius: 8,
+                            hoverBackgroundColor: 'rgba(0, 121, 107, 1)',
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true, grid: { drawBorder: false } },
+                            x: { grid: { display: false } }
+                        },
+                        ...chartTooltipOptions,
+                        animation: {
+                            duration: 1500,
+                            easing: 'easeInOutQuart',
+                            from: 1,
+                            to: 0,
+                            loop: false
+                        }
+                    }
+                });
+            }
+
+            renderStorageChart();
+            renderCommunityChart();
+
+            const aiForm = document.getElementById('ai-form');
+            const aiQueryInput = document.getElementById('ai-query');
+            const aiSubmitBtn = document.getElementById('ai-submit-btn');
+            const aiResponseContainer = document.getElementById('ai-response');
+            const aiLoader = document.getElementById('ai-loader');
+
+            aiResponseContainer.textContent = 'Ask a question above to see the AI in action!';
+
+            aiForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const query = aiQueryInput.value.trim();
+                if (!query) return;
+
+                aiLoader.classList.remove('hidden');
+                aiResponseContainer.textContent = '';
+                aiSubmitBtn.disabled = true;
+
+                try {
+                    const response = await fetch('/api/chatbot', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ query: query })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok.');
+                    }
+
+                    const data = await response.json();
+                    aiResponseContainer.textContent = data.response || 'Sorry, I could not find an answer.';
+
+                } catch (error) {
+                    console.error('Error fetching AI response:', error);
+                    aiResponseContainer.textContent = 'An error occurred. Please try again later.';
+                } finally {
+                    aiLoader.classList.add('hidden');
+                    aiSubmitBtn.disabled = false;
+                    aiQueryInput.value = '';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
