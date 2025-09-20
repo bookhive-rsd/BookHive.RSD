@@ -15,6 +15,7 @@ const cron = require('node-cron');
 const fs = require('fs').promises;
 const pdfParse = require('pdf-parse');
 const axios = require('axios');
+const dns = require('dns'); // Import the dns module
 const Application = require('./models/Application');
 // const { isAuthenticated } = require('./middleware/auth');
 require('dotenv').config();
@@ -64,6 +65,19 @@ app.use(session({
       sameSite: 'lax'
     }
 }));
+
+// Helper function to verify if an email's domain has MX records
+async function verifyEmailDomain(email) {
+    try {
+        const domain = email.split('@')[1];
+        const records = await dns.promises.resolveMx(domain);
+        return records && records.length > 0;
+    } catch (error) {
+        console.error('DNS lookup failed for:', email, error);
+        return false;
+    }
+}
+
 // Helper function to call Gemini API
 async function callGeminiAPI(prompt, textContent) {
   try {
@@ -177,7 +191,7 @@ passport.use(new GoogleStrategy({
     await newNote.save();
     try {
       const mailOptions = {
-        from: process.env.EMAIL_USER,
+        from: `"BookHive Team" <${process.env.EMAIL_USER}>`,
         to: user.email,
         subject: 'Welcome to BookHive!',
         html: `
@@ -185,7 +199,13 @@ passport.use(new GoogleStrategy({
           <p>Thank you for joining our community. Explore, upload, and share your favorite books with BookHive.</p>
           <p>Get started by visiting your <a href="https://bookhive-rsd.onrender.com/bookhive">Library</a>.</p>
           <p>Best regards,<br>BookHive Team</p>
-        `
+        `,
+        text: `Welcome to BookHive, ${user.username}!\n\nThank you for joining our community. Explore, upload, and share your favorite books with BookHive.\n\nGet started by visiting your Library: https://bookhive-rsd.onrender.com/bookhive\n\nBest regards,\nBookHive Team`,
+        headers: {
+            'X-Priority': '3',
+            'X-MSMail-Priority': 'Normal',
+            'Importance': 'Normal'
+        }
       };
       await transporter.sendMail(mailOptions);
       console.log(`Welcome email sent to: ${user.email}`);
@@ -437,7 +457,12 @@ const transporter = nodemailer.createTransport({
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
-  }
+  },
+  // Added options to improve connection handling and potentially deliverability
+  pool: true,
+  maxConnections: 1,
+  rateLimit: 1, 
+  maxMessages: 20
 });
 // Multer for file uploads (PDFs)
 const upload = multer({
@@ -634,7 +659,7 @@ io.on('connection', (socket) => {
       const recipient = await User.findById(recipientId);
       const requester = await User.findById(requesterId);
       const mailOptions = {
-        from: process.env.EMAIL_USER,
+        from: `"BookHive Team" <${process.env.EMAIL_USER}>`,
         to: recipient.email,
         subject: 'New Private Chat Request on BookHive',
         html: `
@@ -642,7 +667,13 @@ io.on('connection', (socket) => {
           <p>User <strong>${requester.username}</strong> has requested to start a private chat with you.</p>
           <p>Please visit <a href="https://bookhive-rsd.onrender.com/community">BookHive Community</a> to accept or decline this request.</p>
           <p>Best regards,<br>BookHive Team</p>
-        `
+        `,
+        text: `New Private Chat Request\n\nUser ${requester.username} has requested to start a private chat with you.\n\nPlease visit BookHive Community to accept or decline this request: https://bookhive-rsd.onrender.com/community\n\nBest regards,\nBookHive Team`,
+        headers: {
+            'X-Priority': '3',
+            'X-MSMail-Priority': 'Normal',
+            'Importance': 'Normal'
+        }
       };
       await transporter.sendMail(mailOptions);
       console.log(`Private chat request email sent to: ${recipient.email}`);
@@ -806,6 +837,19 @@ app.get('/', async (req, res) => {
     });
   }
 });
+
+app.get('/infographic', isAuthenticated, (req, res) => {
+  try {
+    res.render('infographic', {
+      user: req.user,
+      note: req.note ? req.note.content : ''
+    });
+  } catch (err) {
+    console.error('Infographic route error:', err);
+    res.status(500).render('error', { message: 'Failed to load infographic page', user: req.user, note: req.note ? req.note.content : '' });
+  }
+});
+
 app.get('/bookhive', isAuthenticated, async (req, res) => {
   try {
     const user = req.user;
@@ -885,6 +929,26 @@ app.post('/signup', async (req, res) => {
     if (!username || !email || !password || !profession) {
       return res.status(400).render('signup', { error: 'All fields are required', user: req.user, note: req.note ? req.note.content : '' });
     }
+    
+    // Server-side email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        return res.status(400).render('signup', { error: 'Please enter a valid email address.', user: req.user, note: req.note ? req.note.content : '' });
+    }
+
+    // Server-side password strength validation
+    const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(password)) {
+        return res.status(400).render('signup', { error: 'Password must be at least 8 characters long and contain at least one uppercase letter and one number.', user: req.user, note: req.note ? req.note.content : '' });
+    }
+
+    // Check if email domain is valid
+    const isDomainValid = await verifyEmailDomain(email);
+    if (!isDomainValid) {
+        return res.status(400).render('signup', { error: 'The email provider does not exist or could not be reached. Please use a different email.', user: req.user, note: req.note ? req.note.content : '' });
+    }
+
+
     if (!['BookHive'].includes(profession)) {
       return res.status(400).render('signup', { error: 'Invalid profession selected', user: req.user, note: req.note ? req.note.content : '' });
     }
@@ -907,7 +971,7 @@ app.post('/signup', async (req, res) => {
     await newNote.save();
     try {
       const mailOptions = {
-        from: process.env.EMAIL_USER,
+        from: `"BookHive Team" <${process.env.EMAIL_USER}>`,
         to: newUser.email,
         subject: 'Welcome to BookHive!',
         html: `
@@ -915,7 +979,13 @@ app.post('/signup', async (req, res) => {
           <p>Thank you for joining our community. Explore, upload, and share your favorite books with BookHive.</p>
           <p>Get started by visiting your <a href="https://bookhive-rsd.onrender.com/bookhive">BookHive Dashboard</a>.</p>
           <p>Best regards,<br>BookHive Team</p>
-        `
+        `,
+        text: `Welcome to BookHive, ${newUser.username}!\n\nThank you for joining our community. Explore, upload, and share your favorite books with BookHive.\n\nGet started by visiting your BookHive Dashboard: https://bookhive-rsd.onrender.com/bookhive\n\nBest regards,\nBookHive Team`,
+        headers: {
+            'X-Priority': '3',
+            'X-MSMail-Priority': 'Normal',
+            'Importance': 'Normal'
+        }
       };
       await transporter.sendMail(mailOptions);
       console.log(`Welcome email sent to: ${newUser.email}`);
@@ -1906,7 +1976,7 @@ app.post('/admin/news/post', isAuthenticated, isAdmin, newsImageUpload.single('i
     try {
       for (const email of emailList) {
         const mailOptions = {
-          from: 'bookhive.rsd@gmail.com',
+          from: `"BookHive Team" <${process.env.EMAIL_USER}>`,
           to: email,
           subject: `New Update from BookHive: ${sanitizedTitle}`,
           html: `
@@ -1917,6 +1987,12 @@ app.post('/admin/news/post', isAuthenticated, isAdmin, newsImageUpload.single('i
             <p>Visit <a href="https://bookhive-rsd.onrender.com/news">BookHive News</a> to read more.</p>
             <p>Best regards,<br>BookHive Team</p>
           `,
+          text: `New Update from BookHive\n\n${sanitizedTitle}\n\n${sanitizedContent.replace(/<[^>]*>?/gm, '')}\n\nVisit BookHive News to read more: https://bookhive-rsd.onrender.com/news\n\nBest regards,\nBookHive Team`,
+          headers: {
+            'X-Priority': '3',
+            'X-MSMail-Priority': 'Normal',
+            'Importance': 'Normal'
+          },
           attachments: req.file ? [{
             filename: req.file.originalname,
             content: req.file.buffer,
@@ -1975,7 +2051,7 @@ app.post('/request-access', isAuthenticated, async (req, res) => {
     await accessRequest.save();
     try {
       const mailOptions = {
-        from: process.env.EMAIL_USER,
+        from: `"BookHive Team" <${process.env.EMAIL_USER}>`,
         to: book.uploadedBy.email,
         subject: `Access Request for ${book.title}`,
         html: `
@@ -1984,7 +2060,13 @@ app.post('/request-access', isAuthenticated, async (req, res) => {
           <p>Please review the request and grant access if appropriate.</p>
           <p>Visit <a href="https://bookhive-rsd.onrender.com/access-requests">Access Requests</a> to manage this request.</p>
           <p>Best regards,<br>BookHive Team</p>
-        `
+        `,
+        text: `Access Request for Restricted Book\n\nUser ${user.username} has requested access to your book "${book.title}".\n\nPlease review the request and grant access if appropriate.\n\nVisit Access Requests to manage this request: https://bookhive-rsd.onrender.com/access-requests\n\nBest regards,\nBookHive Team`,
+        headers: {
+            'X-Priority': '3',
+            'X-MSMail-Priority': 'Normal',
+            'Importance': 'Normal'
+        }
       };
       await transporter.sendMail(mailOptions);
       console.log(`Access request email sent to: ${book.uploadedBy.email}`);
@@ -2446,7 +2528,7 @@ async function sendDailyPublicationEmails() {
           <p><a href="https://bookhive-rsd.onrender.com/publications">View Post</a></p>
         </div>
       `;
-    });
+    }).join('<hr>');
     for (const email of emailList) {
       const attachments = [];
       publications.forEach((pub, index) => {
@@ -2459,16 +2541,25 @@ async function sendDailyPublicationEmails() {
           });
         });
       });
+
+      const publicationText = publicationHtml.replace(/<[^>]*>?/gm, '');
+
       const mailOptions = {
-        from: process.env.EMAIL_USER,
+        from: `"BookHive Team" <${process.env.EMAIL_USER}>`,
         to: email,
         subject: 'Daily Publication Updates from BookHive',
         html: `
           <h2>Today's Top Publications on BookHive</h2>
-          ${publicationHtml.join('<hr>')}
+          ${publicationHtml}
           <p>Visit <a href="https://bookhive-rsd.onrender.com/publications">Publications</a> to see more.</p>
           <p>Best regards,<br>BookHive Team</p>
         `,
+        text: `Today's Top Publications on BookHive\n\n${publicationText}\n\nVisit Publications to see more: https://bookhive-rsd.onrender.com/publications\n\nBest regards,\nBookHive Team`,
+        headers: {
+            'X-Priority': '3',
+            'X-MSMail-Priority': 'Normal',
+            'Importance': 'Normal'
+        },
         attachments
       };
       await transporter.sendMail(mailOptions);

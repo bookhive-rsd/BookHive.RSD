@@ -582,7 +582,7 @@
       }
     }
     .welcome-text {
-      color: white;
+      color: yellow;
       font-size: 1.0rem;
       font-weight: 600;
       text-shadow: 0 2px 4px rgba(0, 0, 0, 1.5);
@@ -615,14 +615,14 @@
           <img src="/images/logo-removebg-preview.png" alt="BookHive Logo" class="logo">
         </a>
         <% if (user) { %>
-          <a href="/images/logo-removebg-preview.png" class="welcome-link">
+          <a href="/infographic" class="welcome-link">
             <div class="welcome-text">Welcome to BookHive, <%= user.username %></div>
           </a>
         <% } %>
       </div>
       <nav class="nav-menu">
         <% if (user) { %>
-          <a href="/applications" class="nav-link"><i class="fas fa-th"></i> Applications</a>
+          <!-- <a href="/applications" class="nav-link"><i class="fas fa-th"></i> Applications</a> -->
           <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
           <a href="/publications" class="nav-link"><i class="fas fa-book-open"></i> Publications</a>
           <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
@@ -829,12 +829,12 @@
         <div class="or-divider">OR</div>
         <form action="/login" method="POST">
           <div class="form-group">
-            <label for="email">Email</label>
-            <input type="email" id="email" name="email" required>
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" name="email" required>
           </div>
           <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" required>
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" name="password" required>
           </div>
           <button type="submit" class="btn btn-primary">Login</button>
         </form>
@@ -856,26 +856,22 @@
           </a>
         </div>
         <div class="or-divider">OR</div>
-        <form action="/signup" method="POST">
+        <form action="/signup" method="POST" id="signupForm">
           <div class="form-group">
-            <label for="username">Username</label>
-            <input type="text" id="username" name="username" required>
+            <label for="signup-username">Username</label>
+            <input type="text" id="signup-username" name="username" required>
           </div>
           <div class="form-group">
-            <label for="email">Email</label>
-            <input type="email" id="email" name="email" required>
+            <label for="signup-email">Email</label>
+            <input type="email" id="signup-email" name="email" required>
+            <div id="email-error" style="color: red; font-size: 0.8rem; height: 1rem; margin-top: 4px;"></div>
           </div>
           <div class="form-group">
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" required>
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" name="password" required>
+            <div id="password-error" style="color: red; font-size: 0.8rem; height: 1.2rem; margin-top: 4px;"></div>
           </div>
-          <div class="form-group">
-            <label for="profession">Profession</label>
-            <select id="profession" name="profession" required>
-              <option value="" disabled selected>Select your profession</option>
-              <option value="BookHive">BookHive</option>
-            </select>
-          </div>
+          <input type="hidden" name="profession" value="BookHive">
           <button type="submit" class="btn btn-primary">Sign Up</button>
         </form>
         <p class="form-footer">
@@ -1004,6 +1000,51 @@
       signupModal.style.display = 'none';
       showLogin();
     });
+
+    // Signup form validation
+    const signupForm = document.getElementById('signupForm');
+    if (signupForm) {
+      const emailInput = document.getElementById('signup-email');
+      const passwordInput = document.getElementById('signup-password');
+      const emailError = document.getElementById('email-error');
+      const passwordError = document.getElementById('password-error');
+      
+      emailInput.addEventListener('input', () => {
+        if (emailError.textContent) emailError.textContent = '';
+      });
+      
+      passwordInput.addEventListener('input', () => {
+        if (passwordError.textContent) passwordError.textContent = '';
+      });
+
+      signupForm.addEventListener('submit', function(event) {
+        let isValid = true;
+        
+        // Email validation
+        const email = emailInput.value;
+        const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+        if (!email || !emailRegex.test(email)) {
+          emailError.textContent = 'Please enter a valid email address.';
+          isValid = false;
+        } else {
+          emailError.textContent = '';
+        }
+
+        // Password validation
+        const password = passwordInput.value;
+        const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+        if (!password || !passwordRegex.test(password)) {
+          passwordError.textContent = 'Use 8+ chars with one uppercase & one number.';
+          isValid = false;
+        } else {
+          passwordError.textContent = '';
+        }
+        
+        if (!isValid) {
+          event.preventDefault(); 
+        }
+      });
+    }
   </script>
   <% } %>
   <script>
