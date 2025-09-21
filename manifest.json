@@ -1,0 +1,22 @@
+{
+  "name": "BookHive",
+  "short_name": "BookHive",
+  "description": "BookHive - Your digital library to upload, organize, share, and read books seamlessly.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#4a90e2",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/images/logo-removebg-preview.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/images/logo-removebg-preview.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
