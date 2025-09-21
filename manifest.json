@@ -22,62 +22,62 @@
 ],
 "icons": [
 {
-"src": "/images/logo-removebg-preview.png",
+"src": "/images/logo.png",
 "type": "image/png",
-"sizes": "192x192"
+"sizes": "192x192",
+"purpose": "any"
 },
 {
-"src": "/images/logo-removebg-preview.png",
+"src": "/images/logo-512x512.png",
 "type": "image/png",
-"sizes": "512x512"
+"sizes": "512x512",
+"purpose": "any maskable"
 }
 ],
 "screenshots": [
 {
-"src": "/images/IndexPage.jpg",
-"type": "image/jpeg",
+"src": "/images/screenshots/IndexPage.png",
+"type": "image/png",
 "sizes": "1080x1920",
-"form_factor": "narrow"
+"form_factor": "narrow",
+"label": "Welcome to BookHive"
 },
 {
-"src": "/images/NewsPage.jpg",
-"type": "image/jpeg",
-"sizes": "1920x1080",
-"form_factor": "wide"
+"src": "/images/screenshots/NewsPage.png",
+"type": "image/png",
+"sizes": "1080x1920",
+"form_factor": "narrow",
+"label": "Latest News and Updates"
 },
 {
-"src": "/images/publicationsPage.jpg",
-"type": "image/jpeg",
+"src": "/images/screenshots/BooksPage.png",
+"type": "image/png",
 "sizes": "1920x1080",
-"form_factor": "wide"
+"form_factor": "wide",
+"label": "Your Personal Library"
 },
 {
-"src": "/images/BooksPage.jpg",
-"type": "image/jpeg",
+"src": "/images/screenshots/CommunityPage.png",
+"type": "image/png",
 "sizes": "1920x1080",
-"form_factor": "wide"
-},
-{
-"src": "/images/comunitypage.jpg",
-"type": "image/jpeg",
-"sizes": "1920x1080",
-"form_factor": "wide"
+"form_factor": "wide",
+"label": "Engage with the Community"
 }
 ],
 "shortcuts": [
 {
 "name": "BookHive Library",
-"short_name": "BookHive",
+"short_name": "Library",
 "description": "View your personal book collection",
 "url": "/bookhive",
-"icons": [{ "src": "/images/icon-library.png", "sizes": "192x192" }]
+"icons": [{ "src": "/images/icons/library.png", "sizes": "192x192" }]
 },
 {
 "name": "News Today",
 "short_name": "News",
 "description": "Discover daily news and updates about books",
 "url": "/news",
-"icons": [{ "src": "/images/icon-explore.png", "sizes": "192x192" }]
+"icons": [{ "src": "/images/icons/news.png", "sizes": "192x192" }]
 }
 ],
 "share_target": {
