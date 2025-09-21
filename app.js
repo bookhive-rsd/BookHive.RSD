@@ -15,10 +15,12 @@ const cron = require('node-cron');
 const fs = require('fs').promises;
 const pdfParse = require('pdf-parse');
 const axios = require('axios');
-const dns = require('dns'); // Import the dns module
+const dns = require('dns');
+const pako = require('pako');
 const Application = require('./models/Application');
-// const { isAuthenticated } = require('./middleware/auth');
 require('dotenv').config();
+const fileCache = new Map();
+// const { isAuthenticated } = require('./middleware/auth');
 const GEMINI_API_KEY = 'AIzaSyBcnPIGkKdkSpoJaPv3W3mw3uV7c9pH2QI';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 const app = express();
@@ -107,25 +109,7 @@ async function callGeminiAPI(prompt, textContent) {
     throw new Error('Failed to process AI request');
   }
 }
-// Validate PDF for adult content
-async function validatePdfContent(pdfBuffer) {
-  try {
-    const data = await pdfParse(pdfBuffer);
-    const textContent = data.text.slice(0, 8000); // Limit text to avoid large API requests
-    
-    // **FIXED**: Uncomment the following lines to use the Gemini API for validation
-    // const prompt = 'Analyze the following text and determine if it contains adult content (e.g., explicit sexual material, nudity, or inappropriate language). Respond with ONLY "Yes" if adult content is detected, or ONLY "No" if it is not.';
-    // const result = await callGeminiAPI(prompt, textContent);
-    
-    // **Alternative if you want to skip API validation for now**
-    const result = "No"; // This will always mark content as safe.
 
-    return result.trim().toLowerCase() === 'no';
-  } catch (error) {
-    console.error('PDF validation error:', error);
-    throw new Error('Failed to validate PDF content');
-  }
-}
 // Security function to validate the AI-generated MongoDB pipeline
 function isPipelineSafe(pipeline) {
     if (!Array.isArray(pipeline)) return false;
@@ -237,16 +221,14 @@ const bookSchema = new mongoose.Schema({
   fileData: { type: Buffer, required: true },
   fileType: { type: String, required: true, enum: ['pdf'] },
   contentType: { type: String, required: true },
-  thumbnail: { type: Buffer },
-  thumbnailType: { type: String },
-  description: { type: String },
-  tags: [{ type: String }],
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   uploadDate: { type: Date, default: Date.now },
   fileSize: { type: Number, required: true },
   visibility: { type: String, enum: ['private', 'public', 'restricted'], default: 'private' },
   accessList: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   pinCount: { type: Number, default: 0 },
+  isCompressed: { type: Boolean, default: false }, // To track compressed files
+  originalSize: { type: Number } // To store the original file size
 });
 const requestSchema = new mongoose.Schema({
   book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', required: true },
@@ -278,7 +260,9 @@ const newsSchema = new mongoose.Schema({
   image: { type: Buffer },
   imageType: { type: String },
   createdAt: { type: Date, default: Date.now },
-  postedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  postedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  isCompressed: { type: Boolean, default: false },
+  originalSize: { type: Number }
 });
 const publicationSchema = new mongoose.Schema({
   content: { type: String, required: true },
@@ -289,12 +273,16 @@ const publicationSchema = new mongoose.Schema({
   images: [{
     data: Buffer,
     contentType: String,
-    filename: String
+    filename: String,
+    isCompressed: { type: Boolean, default: false },
+    originalSize: { type: Number }
   }],
   documents: [{
     data: Buffer,
     contentType: String,
-    filename: String
+    filename: String,
+    isCompressed: { type: Boolean, default: false },
+    originalSize: { type: Number }
   }]
 });
 const commentSchema = new mongoose.Schema({
@@ -461,7 +449,7 @@ const transporter = nodemailer.createTransport({
   // Added options to improve connection handling and potentially deliverability
   pool: true,
   maxConnections: 1,
-  rateLimit: 1, 
+  rateLimit: 1,
   maxMessages: 20
 });
 // Multer for file uploads (PDFs)
@@ -564,9 +552,9 @@ Here are the available Mongoose collections and their schemas. You must use thes
 // Multer error handling
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
-    return res.status(400).render('upload', { error: err.message, user: req.user, note: req.note ? req.note.content : '' });
+    return res.status(400).render('error', { message: err.message, user: req.user, note: req.note ? req.note.content : '' });
   } else if (err) {
-    return res.status(400).render('upload', { error: err.message, user: req.user, note: req.note ? req.note.content : '' });
+    return res.status(400).render('error', { message: err.message, user: req.user, note: req.note ? req.note.content : '' });
   }
   next();
 });
@@ -929,7 +917,7 @@ app.post('/signup', async (req, res) => {
     if (!username || !email || !password || !profession) {
       return res.status(400).render('signup', { error: 'All fields are required', user: req.user, note: req.note ? req.note.content : '' });
     }
-    
+
     // Server-side email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
@@ -1115,60 +1103,51 @@ app.get('/upload', isAuthenticated, (req, res) => {
 });
 app.post('/upload', isAuthenticated, upload.single('file'), async (req, res) => {
   try {
-    const user = req.user;
-    if (user.isAdmin) {
-      return res.redirect('/admin');
-    }
+    const user = await User.findById(req.session.userId);
+    if (user.isAdmin) return res.redirect('/admin');
+
     if (!req.file) {
-      return res.status(400).render('upload', { error: 'Please upload a file', user: req.user, note: req.note ? req.note.content : '' });
+      return res.status(400).render('error', { message: 'Please upload a file', user, note: req.note ? req.note.content : '' });
     }
+
     const { title, author, visibility, description, tags } = req.body;
-    const tagArray = tags ? tags.split(',').map(tag => tag.trim()) : [];
-    if (!['private', 'public', 'restricted'].includes(visibility)) {
-      return res.status(400).render('upload', { error: 'Invalid visibility option', user: req.user, note: req.note ? req.note.content : '' });
+    const originalBuffer = req.file.buffer;
+    const originalSize = originalBuffer.length;
+
+    // 2. Compress the file buffer using pako and convert to Buffer
+    const compressedBuffer = Buffer.from(pako.gzip(originalBuffer));
+    const compressedSize = compressedBuffer.length;
+
+    console.log(`File compressed: ${originalSize / 1024 / 1024} MB -> ${compressedSize / 1024 / 1024} MB`);
+
+    if (user.storageUsed + compressedSize > user.storageLimit) {
+      return res.status(400).render('error', { message: 'Storage limit exceeded.', user, note: req.note ? req.note.content : '' });
     }
-    const fileSize = req.file.size;
-    if (user.storageUsed + fileSize > user.storageLimit) {
-      return res.status(400).render('upload', {
-        error: 'Storage limit exceeded. Delete some files or upgrade your plan.',
-        user: req.user,
-        note: req.note ? req.note.content : ''
-      });
-    }
-    const fileType = getFileTypeFromMime(req.file.mimetype);
-    if (!fileType) {
-      return res.status(400).render('upload', { error: 'Only PDF files allowed', user: req.user, note: req.note ? req.note.content : '' });
-    }
-    const isSafe = await validatePdfContent(req.file.buffer);
-    if (!isSafe) {
-      return res.status(400).render('upload', {
-        error: 'Adult content detected. This content cannot be uploaded.',
-        user: req.user,
-        note: req.note ? req.note.content : ''
-      });
-    }
-    const pdfData = await pdfParse(req.file.buffer);
-    const textContent = pdfData.text.slice(0, 100000);
+
     const newBook = new Book({
       title,
       author,
       fileName: req.file.originalname,
-      fileData: req.file.buffer,
-      fileType,
+      fileData: compressedBuffer, // Store the compressed data as a Buffer
+      fileType: 'pdf',
       contentType: req.file.mimetype,
       description,
-      tags: tagArray,
+      tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
       uploadedBy: req.session.userId,
       visibility,
-      fileSize,
+      fileSize: compressedSize, // Store the new, compressed size
+      isCompressed: true, // Mark as compressed
+      originalSize: originalSize // Store original size for reference
     });
+
     await newBook.save();
-    user.storageUsed += fileSize;
+    user.storageUsed += compressedSize;
     await user.save();
+
     res.redirect('/bookhive');
   } catch (err) {
     console.error('Upload error:', err);
-    res.status(500).render('upload', { error: err.message || 'Failed to upload file', user: req.user, note: req.note ? req.note.content : '' });
+    res.status(500).render('error', { message: 'Failed to upload file', user: req.user, note: req.note ? req.note.content : '' });
   }
 });
 app.get('/view/:bookId', isAuthenticated, async (req, res) => {
@@ -1195,25 +1174,49 @@ app.get('/view/:bookId', isAuthenticated, async (req, res) => {
 });
 app.get('/file/:bookId', isAuthenticated, async (req, res) => {
   try {
-    const user = req.user;
-    if (user.isAdmin) {
-      return res.status(403).send('Admins cannot access this route');
+    const bookId = req.params.bookId;
+    if (fileCache.has(bookId)) {
+        console.log(`Serving from cache: ${bookId}`);
+        const cachedFile = fileCache.get(bookId);
+        res.set({
+            'Content-Type': cachedFile.contentType,
+            'Content-Disposition': `inline; filename="${cachedFile.fileName}"`,
+            'Content-Length': cachedFile.data.length
+        });
+        return res.send(cachedFile.data);
     }
     const book = await Book.findById(req.params.bookId);
-    if (!book) {
-      return res.status(404).send('File not found');
-    }
+    if (!book) return res.status(404).send('File not found');
+
+    const user = await User.findById(req.session.userId);
     const isOwner = book.uploadedBy.toString() === req.session.userId;
     const hasAccess = book.accessList.includes(req.session.userId);
-    const isPublic = book.visibility === 'public';
-    if (!isOwner && !isPublic && !hasAccess) {
+
+    if (!user.isAdmin && !isOwner && book.visibility !== 'public' && !hasAccess) {
       return res.status(403).send('Access denied');
     }
+
+    let fileDataToSend = book.fileData;
+
+    // 1. Check if the file is compressed
+    if (book.isCompressed) {
+      // 2. Decompress the data and ensure it's a Node.js Buffer
+      const decompressedData = pako.ungzip(book.fileData);
+      fileDataToSend = Buffer.from(decompressedData);
+      console.log(`Decompressing file: ${book.fileName}`);
+    }
+
+    fileCache.set(bookId, {
+        fileName: book.fileName,
+        contentType: book.contentType,
+        data: fileDataToSend
+    });
     res.set({
       'Content-Type': book.contentType,
-      'Content-Disposition': `inline; filename="${book.fileName}"`
+      'Content-Disposition': `inline; filename="${book.fileName}"`,
+      'Content-Length': fileDataToSend.length // Important to set correct length
     });
-    res.send(book.fileData);
+    res.send(fileDataToSend);
   } catch (err) {
     console.error('File fetch error:', err);
     res.status(500).send('Failed to load file');
@@ -1250,6 +1253,7 @@ app.delete('/book/:id', isAuthenticated, async (req, res) => {
     if (!book) {
       return res.status(404).json({ success: false, message: 'Book not found' });
     }
+    fileCache.delete(req.params.id);
     user.storageUsed = Math.max(0, user.storageUsed - book.fileSize);
     await user.save();
     await User.updateMany(
@@ -1900,11 +1904,17 @@ app.get('/news-image/:newsId', async (req, res) => {
     if (!news || !news.image) {
       return res.status(404).send('Image not found');
     }
+
+    let image_to_send = news.image;
+    if (news.isCompressed) {
+        const decompressedData = pako.ungzip(news.image);
+        image_to_send = Buffer.from(decompressedData);
+    }
     res.set({
       'Content-Type': news.imageType || 'image/jpeg',
       'Content-Disposition': `inline; filename="news-${news._id}.jpg"`
     });
-    res.send(news.image);
+    res.send(image_to_send);
   } catch (err) {
     console.error('News image fetch error:', err);
     res.status(500).send('Failed to load image');
@@ -1966,8 +1976,14 @@ app.post('/admin/news/post', isAuthenticated, isAdmin, newsImageUpload.single('i
       postedBy: req.session.userId
     };
     if (req.file) {
-      newsData.image = req.file.buffer;
+      const original_buffer = req.file.buffer;
+      const original_size = original_buffer.length;
+      const compressed_buffer = Buffer.from(pako.gzip(original_buffer));
+
+      newsData.image = compressed_buffer;
       newsData.imageType = req.file.mimetype;
+      newsData.isCompressed = true;
+      newsData.originalSize = original_size;
     }
     const news = new News(newsData);
     await news.save();
@@ -2158,21 +2174,24 @@ app.post('/publication', isAuthenticated, (req, res, next) => {
     const images = [];
     const documents = [];
     for (const file of req.files || []) {
+        const original_buffer = file.buffer;
+        const original_size = original_buffer.length;
+        const compressed_buffer = Buffer.from(pako.gzip(original_buffer));
       if (file.mimetype.startsWith('image/')) {
         images.push({
-          data: file.buffer,
+          data: compressed_buffer,
           contentType: file.mimetype,
-          filename: file.originalname
+          filename: file.originalname,
+          isCompressed: true,
+          originalSize: original_size
         });
       } else if (file.mimetype === 'application/pdf') {
-        const isSafe = await validatePdfContent(file.buffer);
-        if (!isSafe) {
-          return res.status(400).json({ success: false, message: `Adult content detected in PDF (${file.originalname}). Cannot upload.` });
-        }
         documents.push({
-          data: file.buffer,
+          data: compressed_buffer,
           contentType: file.mimetype,
-          filename: file.originalname
+          filename: file.originalname,
+          isCompressed: true,
+          originalSize: original_size
         });
       }
     }
@@ -2210,11 +2229,17 @@ app.get('/publication-file/:pubId/:type/:index', isAuthenticated, async (req, re
     if (!file) {
       return res.status(404).send('File not found');
     }
+
+    let file_to_send = file.data;
+    if(file.isCompressed) {
+        const decompressedData = pako.ungzip(file.data);
+        file_to_send = Buffer.from(decompressedData);
+    }
     res.set({
       'Content-Type': file.contentType,
       'Content-Disposition': `inline; filename="${file.filename}"`
     });
-    res.send(file.data);
+    res.send(file_to_send);
   } catch (err) {
     console.error('Publication file fetch error:', err);
     res.status(500).send('Failed to load file');
@@ -2702,7 +2727,6 @@ app.post('/api/chatbot', isAuthenticated, async (req, res) => {
         const { query } = req.body;
         if (!query) return res.status(400).json({ success: false, message: 'Query is required.' });
 
-        // --- Step 1: Master Dispatcher - AI decides WHICH task to perform ---
         const taskDispatchPrompt = `
             You are a master AI agent dispatcher. Your job is to analyze the user's query and categorize it into one of three tasks.
             Respond ONLY with a valid JSON object.
@@ -2716,36 +2740,30 @@ app.post('/api/chatbot', isAuthenticated, async (req, res) => {
 
             User Query: "${query}"
         `;
-
         const dispatchText = await callGeminiAPI(taskDispatchPrompt, "");
         let dispatchPlan = { task: 'general_conversation', subject: null };
         try {
             const jsonMatch = dispatchText.match(/\{.*\}/s);
             if (jsonMatch) dispatchPlan = JSON.parse(jsonMatch[0]);
-        } catch (e) {
-            console.error("Failed to parse dispatch plan:", dispatchText);
-        }
-        console.log('AI Dispatch Plan:', dispatchPlan);
+        } catch (e) { console.error("Failed to parse dispatch plan:", dispatchText); }
 
-        // --- Step 2: Execute the chosen task ---
         switch (dispatchPlan.task) {
-
-            // ==========================================================
-            //  TASK: CONTENT SUMMARY
-            // ==========================================================
             case 'content_summary': {
                 const subject = dispatchPlan.subject;
                 if (!subject) {
-                    return res.json({ success: true, response: "Please specify the exact title of the book, news, or publication you'd like me to summarize." });
+                    return res.json({ success: true, response: "Please specify the exact title of the item to summarize." });
                 }
 
-                let itemContent = null;
-                let itemTitle = subject;
+                const book = await Book.findOne({ title: new RegExp(`^${subject}$`, 'i') }).select('fileData title isCompressed');
 
-                // Search for the item across collections
-                const book = await Book.findOne({ title: new RegExp(`^${subject}$`, 'i') }).select('fileData title');
+                let itemContent = null;
                 if (book) {
-                    const pdfData = await pdfParse(book.fileData);
+                    // DECOMPRESS before parsing if necessary
+                    let pdfBuffer = book.fileData;
+                    if (book.isCompressed) {
+                        pdfBuffer = pako.ungzip(book.fileData);
+                    }
+                    const pdfData = await pdfParse(pdfBuffer);
                     itemContent = pdfData.text.slice(0, 20000);
                 } else {
                     const news = await News.findOne({ title: new RegExp(`^${subject}$`, 'i') }).select('content title');
@@ -2759,19 +2777,15 @@ app.post('/api/chatbot', isAuthenticated, async (req, res) => {
                         }
                     }
                 }
-                
+
                 if (!itemContent) {
-                    return res.json({ success: true, response: `I'm sorry, I couldn't find any content for an item titled "${subject}".` });
+                    return res.json({ success: true, response: `I couldn't find any content for "${subject}".` });
                 }
 
-                const summaryPrompt = `Please provide a detailed summary of the following content from "${itemTitle}". The user's original question was: "${query}"\n\n--- CONTENT ---\n${itemContent}`;
+                const summaryPrompt = `Provide a detailed summary... Content: ${itemContent}`;
                 const finalResponse = await callGeminiAPI(summaryPrompt, "");
                 return res.json({ success: true, response: finalResponse });
             }
-
-            // ==========================================================
-            //  TASK: DATABASE QUERY
-            // ==========================================================
             case 'database_query': {
                 const pipelineGenerationPrompt = `
                     You are a MongoDB expert AI. Convert the user's question into a secure, read-only MongoDB aggregation pipeline.
@@ -2794,7 +2808,7 @@ app.post('/api/chatbot', isAuthenticated, async (req, res) => {
                 if (!queryPlan.collection || !isPipelineSafe(queryPlan.pipeline)) {
                     return res.json({ success: true, response: "I'm sorry, I cannot process that specific query." });
                 }
-                
+
                 const targetCollection = mongoose.connection.collection(queryPlan.collection);
                 const toolResult = await targetCollection.aggregate(queryPlan.pipeline).toArray();
 
@@ -2806,20 +2820,15 @@ app.post('/api/chatbot', isAuthenticated, async (req, res) => {
                 const finalResponse = await callGeminiAPI(finalResponsePrompt, "");
                 return res.json({ success: true, response: finalResponse });
             }
-
-            // ==========================================================
-            //  TASK: GENERAL CONVERSATION
-            // ==========================================================
-            case 'general_conversation':
             default: {
                 const genericPrompt = `The user said: "${query}". Provide a brief, friendly, and helpful response in your persona as the BookHive AI assistant. Guide them on what they can ask (e.g., ask for lists of books, news, or summaries of specific items).`;
                 const finalResponse = await callGeminiAPI(genericPrompt, "");
-                return res.json({ success: true, response: finalResponse });
+                 return res.json({ success: true, response: "Hello! How can I help you with BookHive today?" });
             }
         }
     } catch (err) {
         console.error('AI Chatbot error:', err);
-        res.status(500).json({ success: false, message: 'An error occurred while processing my thoughts.' });
+        res.status(500).json({ success: false, message: 'An error occurred.' });
     }
 });
 

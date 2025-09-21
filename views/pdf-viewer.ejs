@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= book.title %> - PDF Viewer - BookHive</title>
+    <link rel="manifest" href="/manifest.json" />
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/js/all.min.js"></script>
@@ -15,7 +16,6 @@
             margin: 0;
             overflow: hidden;
             font-family: 'Inter', sans-serif; /* Using Inter font */
-            /* font-family: sans-serif; */ /* Default sans-serif */
         }
         .pdf-container {
             display: flex;
@@ -71,7 +71,7 @@
             gap: 0.5rem; /* Spacing between items in a section */
             padding: 0.25rem 0; /* Padding for wrapped rows */
         }
-        .toolbar-button {
+        .toolbar-button, .toolbar-link {
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -83,8 +83,9 @@
             background-color: transparent;
             color: #d1d5db; /* Light gray icon/text */
             transition: background-color 0.15s ease-in-out;
+            text-decoration: none;
         }
-        .toolbar-button:hover {
+        .toolbar-button:hover, .toolbar-link:hover {
             background-color: #374151; /* Slightly lighter gray on hover */
             color: #f9fafb; /* White on hover */
         }
@@ -235,9 +236,7 @@
                         </div>
                     </div>
                     <div class="flex items-center space-x-4">
-                        <!-- <a href="/bookhive" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">BookHive</a> -->
-                        <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
-                        <!-- <a href="/pinned" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">Pinned Books</a> -->
+                        <a href="/bookhive" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2"><i class="fas fa-book"></i> BookHive</a>
                     </div>
                 </div>
             </div>
@@ -245,10 +244,10 @@
 
         <div class="toolbar z-10 relative">
             <div class="toolbar-section">
-                <a href="javascript:history.back()" class="toolbar-button" title="Back">
+                <a href="javascript:history.back()" class="toolbar-link" title="Back">
                     <i class="fas fa-arrow-left"></i>
                 </a>
-                <span class="book-title text-gray-100 font-semibold truncate hidden sm:inline md:hidden"><%= book.title %></span>
+                <span class="book-title text-gray-100 font-semibold truncate hidden sm:inline"><%= book.title %></span>
             </div>
 
             <div class="toolbar-section page-controls">
@@ -271,6 +270,9 @@
                 <button id="zoomIn" class="toolbar-button" title="Zoom In">
                     <i class="fas fa-search-plus"></i>
                 </button>
+                 <button id="rotate" class="toolbar-button" title="Rotate 90°">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
             </div>
 
             <div class="toolbar-section audio-controls">
@@ -283,6 +285,9 @@
             </div>
 
             <div class="toolbar-section utility-controls">
+                <a id="download" class="toolbar-link" title="Download PDF" download>
+                    <i class="fas fa-download"></i>
+                </a>
                 <button id="toggleNotes" class="toolbar-button" title="Toggle Notes">
                     <i class="fas fa-edit"></i>
                 </button>
@@ -350,6 +355,7 @@
             let pageRendering = false;
             let pageNumPending = null;
             let currentScale = 1.0;
+            let currentRotation = 0; // New state for rotation
             const initialAutoScale = true;
             const canvas = document.getElementById('pdf-canvas');
             const ctx = canvas.getContext('2d');
@@ -361,6 +367,9 @@
             const nextButton = document.getElementById('next');
             const zoomInButton = document.getElementById('zoomIn');
             const zoomOutButton = document.getElementById('zoomOut');
+            const rotateButton = document.getElementById('rotate');
+            const downloadLink = document.getElementById('download');
+
 
             // --- Audio Setup ---
             const toggleReadButton = document.getElementById('toggleRead');
@@ -464,7 +473,16 @@
             }
 
             // --- PDF Loading ---
-            const pdfUrl = '/file/<%= book._id %>';
+            const isPubDoc = <%- isPubDoc %>;
+            const pdfUrl = isPubDoc
+                ? `/publication-file/<%= book.pubId %>/document/<%= book.docIndex %>`
+                : `/file/<%= book._id %>`;
+
+            // Set download link href
+            downloadLink.href = pdfUrl;
+            downloadLink.download = '<%= book.fileName %>';
+
+
             console.log('Loading PDF from:', pdfUrl);
             loading.classList.add('show');
 
@@ -477,8 +495,16 @@
                 updatePageNavControls();
                 renderPage(pageNum, initialAutoScale ? null : currentScale);
             }).catch(function(error) {
-                console.error('Error loading PDF:', error);
-                loading.innerHTML = '<p class="text-red-400 font-semibold">Error loading PDF. Please check the file or try again later.</p>';
+                console.error('Error loading PDF from URL ' + pdfUrl + ':', error);
+                let errorMessage = 'Error loading PDF. Please check the file or try again later.';
+                if (error.name === 'MissingPDFException' || (error.message && error.message.includes('Invalid PDF structure'))) {
+                    errorMessage = `Error: The file might be corrupt or not a valid PDF.`;
+                } else if (error.name === 'UnexpectedResponseException') {
+                    errorMessage = `Error: Could not retrieve the document from the server. Status: ${error.status}`;
+                } else if (error.message && error.message.includes('NetworkError')) {
+                     errorMessage = 'Network error. Please check your connection and try again.';
+                }
+                loading.innerHTML = `<p class="text-red-400 font-semibold">${errorMessage}</p>`;
                 loading.classList.add('show');
             });
 
@@ -495,7 +521,7 @@
                     const availableWidth = container.clientWidth - containerPadding;
                     const availableHeight = container.clientHeight - containerPadding;
 
-                    let viewport = page.getViewport({ scale: 1 });
+                    let viewport = page.getViewport({ scale: 1, rotation: currentRotation });
 
                     let scale;
                     if (scaleToUse === null) {
@@ -507,7 +533,7 @@
                         scale = scaleToUse;
                     }
 
-                    viewport = page.getViewport({ scale: scale * Dpr });
+                    viewport = page.getViewport({ scale: scale * Dpr, rotation: currentRotation });
 
                     canvas.height = Math.floor(viewport.height);
                     canvas.width = Math.floor(viewport.width);
@@ -617,41 +643,27 @@
                 }
             });
 
-            // --- Zoom Controls ---
+            // --- Zoom & Rotate Controls ---
             function onZoomIn() {
                 if (currentScale >= 5.0) return;
                 currentScale = parseFloat((currentScale + 0.1).toFixed(2));
-                if (isReading || window.speechSynthesis.paused) {
-                    window.speechSynthesis.cancel();
-                    isReading = false;
-                    toggleReadButton.innerHTML = '<i class="fas fa-volume-up"></i>';
-                    toggleReadButton.title = 'Read Aloud';
-                    stopReadButton.disabled = true;
-                    currentChunkIndex = 0;
-                    currentTextItems = [];
-                    currentPageNum = 0;
-                }
                 queueRenderPage(pageNum);
             }
 
             function onZoomOut() {
                 if (currentScale <= 0.25) return;
                 currentScale = parseFloat((currentScale - 0.1).toFixed(2));
-                if (isReading || window.speechSynthesis.paused) {
-                    window.speechSynthesis.cancel();
-                    isReading = false;
-                    toggleReadButton.innerHTML = '<i class="fas fa-volume-up"></i>';
-                    toggleReadButton.title = 'Read Aloud';
-                    stopReadButton.disabled = true;
-                    currentChunkIndex = 0;
-                    currentTextItems = [];
-                    currentPageNum = 0;
-                }
+                queueRenderPage(pageNum);
+            }
+
+            function onRotate() {
+                currentRotation = (currentRotation + 90) % 360;
                 queueRenderPage(pageNum);
             }
 
             zoomInButton.addEventListener('click', onZoomIn);
             zoomOutButton.addEventListener('click', onZoomOut);
+            rotateButton.addEventListener('click', onRotate);
 
             // --- Fullscreen ---
             const fullscreenButton = document.getElementById('toggleFullscreen');
@@ -719,36 +731,14 @@
                 } else if (e.key === 'f') {
                     toggleFullscreen(pdfContainerElement);
                     handled = true;
-                } else if (e.key === 'r') { // 'r' for Read Aloud
-                    if (isReading) {
-                        window.speechSynthesis.pause();
-                        isReading = false;
-                        toggleReadButton.innerHTML = '<i class="fas fa-volume-up"></i>';
-                        toggleReadButton.title = 'Read Aloud';
-                        stopReadButton.disabled = false;
-                    } else {
-                        if (window.speechSynthesis.paused) {
-                            window.speechSynthesis.resume();
-                            isReading = true;
-                            toggleReadButton.innerHTML = '<i class="fas fa-pause"></i>';
-                            toggleReadButton.title = 'Pause Reading';
-                            stopReadButton.disabled = false;
-                        } else {
-                            startReading();
-                        }
-                    }
+                } else if (e.key === 'r') {
+                     onRotate();
+                     handled = true;
+                } else if (e.key === 't') { // 't' for Text-to-speech
+                    toggleReadButton.click();
                     handled = true;
-                } else if (e.key === 's') { // 's' for Stop Reading
-                    if (isReading || window.speechSynthesis.paused) {
-                        window.speechSynthesis.cancel();
-                        isReading = false;
-                        toggleReadButton.innerHTML = '<i class="fas fa-volume-up"></i>';
-                        toggleReadButton.title = 'Read Aloud';
-                        stopReadButton.disabled = true;
-                        currentChunkIndex = 0;
-                        currentTextItems = [];
-                        currentPageNum = 0;
-                    }
+                } else if (e.key === 's') { // 's' for Stop
+                    stopReadButton.click();
                     handled = true;
                 }
 
@@ -764,16 +754,6 @@
                 resizeTimeout = setTimeout(() => {
                     if (pdfDoc) {
                         console.log('Window resized, re-rendering page.');
-                        if (isReading || window.speechSynthesis.paused) {
-                            window.speechSynthesis.cancel();
-                            isReading = false;
-                            toggleReadButton.innerHTML = '<i class="fas fa-volume-up"></i>';
-                            toggleReadButton.title = 'Read Aloud';
-                            stopReadButton.disabled = true;
-                            currentChunkIndex = 0;
-                            currentTextItems = [];
-                            currentPageNum = 0;
-                        }
                         queueRenderPage(pageNum, currentScale);
                     }
                 }, 250);
@@ -782,3 +762,4 @@
     </script>
 </body>
 </html>
+
