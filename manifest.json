@@ -1,99 +1,95 @@
 {
-"name": "BookHive - Your Digital Library",
-"short_name": "BookHive",
-"description": "Your ultimate digital library to upload, organize, share, and read books seamlessly.",
-"id": "/?source=pwa",
-"start_url": "/",
-"scope": "/",
-"display_override": [
-"standalone",
-"minimal-ui"
-],
-"display": "standalone",
-"background_color": "#ffffff",
-"theme_color": "#4a90e2",
-"orientation": "portrait-primary",
-"lang": "en-US",
-"dir": "ltr",
-"categories": [
-"books",
-"education",
-"social"
-],
-"icons": [
-{
-"src": "/images/logo.png",
-"type": "image/png",
-"sizes": "192x192",
-"purpose": "any"
-},
-{
-"src": "/images/logo-512x512.png",
-"type": "image/png",
-"sizes": "512x512",
-"purpose": "any maskable"
-}
-],
-"screenshots": [
-{
-"src": "/images/screenshots/IndexPage.png",
-"type": "image/png",
-"sizes": "1080x1920",
-"form_factor": "narrow",
-"label": "Welcome to BookHive"
-},
-{
-"src": "/images/screenshots/NewsPage.png",
-"type": "image/png",
-"sizes": "1080x1920",
-"form_factor": "narrow",
-"label": "Latest News and Updates"
-},
-{
-"src": "/images/screenshots/BooksPage.png",
-"type": "image/png",
-"sizes": "1920x1080",
-"form_factor": "wide",
-"label": "Your Personal Library"
-},
-{
-"src": "/images/screenshots/CommunityPage.png",
-"type": "image/png",
-"sizes": "1920x1080",
-"form_factor": "wide",
-"label": "Engage with the Community"
-}
-],
-"shortcuts": [
-{
-"name": "BookHive Library",
-"short_name": "Library",
-"description": "View your personal book collection",
-"url": "/bookhive",
-"icons": [{ "src": "/images/icons/library.png", "sizes": "192x192" }]
-},
-{
-"name": "News Today",
-"short_name": "News",
-"description": "Discover daily news and updates about books",
-"url": "/news",
-"icons": [{ "src": "/images/icons/news.png", "sizes": "192x192" }]
-}
-],
-"share_target": {
-"action": "/share-target/",
-"method": "POST",
-"enctype": "multipart/form-data",
-"params": {
-"title": "name",
-"text": "description",
-"url": "url",
-"files": [
-{
-"name": "books",
-"accept": ["application/pdf", "text/plain"]
-}
-]
-}
-}
+    "name": "BookHive - Your Digital Library",
+    "short_name": "BookHive",
+    "description": "Your ultimate digital library to upload, organize, share, and read books seamlessly.",
+    "id": "/?source=pwa",
+    "start_url": "/",
+    "scope": "https://bookhive-rsd.onrender.com",
+    "display_override": [
+        "standalone",
+        "minimal-ui"
+    ],
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#4a90e2",
+    "orientation": "portrait-primary",
+    "lang": "en-US",
+    "dir": "ltr",
+    "categories": [
+        "books",
+        "education",
+        "social"
+    ],
+    "icons": [
+        {
+            "src": "/images/android-launchericon-512-512.png",
+            "type": "image/png",
+            "sizes": "512x512",
+            "purpose": "any"
+
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "/images/IndexPage.jpg",
+            "type": "image/jpeg",
+            "sizes": "1080x1920",
+            "form_factor": "narrow"
+        },
+        {
+            "src": "/images/NewsPage.jpg",
+            "type": "image/jpeg",
+            "sizes": "1920x1080",
+            "form_factor": "wide"
+        },
+        {
+            "src": "/images/publicationsPage.jpg",
+            "type": "image/jpeg",
+            "sizes": "1920x1080",
+            "form_factor": "wide"
+        },
+        {
+            "src": "/images/BooksPage.jpg",
+            "type": "image/jpeg",
+            "sizes": "1920x1080",
+            "form_factor": "wide"
+        },
+        {
+            "src": "/images/comunitypage.jpg",
+            "type": "image/jpeg",
+            "sizes": "1920x1080",
+            "form_factor": "wide"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "BookHive Library",
+            "description": "View your personal book collection",
+            "url": "/bookhive"
+        },
+        {
+            "name": "News Today",
+            "description": "Discover daily news and updates about books",
+            "url": "/news"
+        }
+    ],
+    "share_target": {
+        "action": "/share-target/",
+        "method": "POST",
+        "enctype": "multipart/form-data",
+        "params": {
+            "title": "name",
+            "text": "description",
+            "url": "url",
+            "files": [
+                {
+                    "name": "books",
+                    "accept": [
+                        "application/pdf",
+                        "text/plain"
+                    ]
+                }
+            ]
+        }
+    }
 }
