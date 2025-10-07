@@ -1,1 +1,8 @@
-
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "bookhive.twa",
+        "sha256_cert_fingerprints": ["9A:43:B3:18:31:CC:CD:22:37:60:F2:61:19:A0:19:49:DC:D0:6F:63:2C:AF:2C:E0:BB:84:8C:41:AF:56:18:20"]
+      }
+    }]
