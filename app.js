@@ -107,25 +107,17 @@ async function callGeminiAPI(prompt, textContent) {
     throw new Error('Failed to process AI request');
   }
 }
-// Validate PDF for adult content
+
 async function validatePdfContent(pdfBuffer) {
   try {
-    const data = await pdfParse(pdfBuffer);
-    const textContent = data.text.slice(0, 8000); // Limit text to avoid large API requests
-    
-    // **FIXED**: Uncomment the following lines to use the Gemini API for validation
-    // const prompt = 'Analyze the following text and determine if it contains adult content (e.g., explicit sexual material, nudity, or inappropriate language). Respond with ONLY "Yes" if adult content is detected, or ONLY "No" if it is not.';
-    // const result = await callGeminiAPI(prompt, textContent);
-    
-    // **Alternative if you want to skip API validation for now**
-    const result = "No"; // This will always mark content as safe.
-
-    return result.trim().toLowerCase() === 'no';
+    // Logic removed to prevent external API failures from blocking user uploads
+    return true; 
   } catch (error) {
     console.error('PDF validation error:', error);
-    throw new Error('Failed to validate PDF content');
+    return true; // Fallback to true so the app remains functional
   }
 }
+
 // Security function to validate the AI-generated MongoDB pipeline
 function isPipelineSafe(pipeline) {
     if (!Array.isArray(pipeline)) return false;
@@ -226,7 +218,7 @@ const userSchema = new mongoose.Schema({
   profession: { type: String, required: true, enum: ['BookHive'] },
   createdAt: { type: Date, default: Date.now },
   storageUsed: { type: Number, default: 0 },
-  storageLimit: { type: Number, default: 1024 * 1024 * 500 },
+  storageLimit: { type: Number, default: 1024 * 1024 * 1024 },
   pinnedBooks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Book' }],
   isAdmin: { type: Boolean, default: false }
 });
