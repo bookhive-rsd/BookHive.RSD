@@ -803,7 +803,7 @@ app.get('/auth/google/callback', (req, res, next) => {
 app.get('/', async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
-    const appDir = path.join(__dirname, 'applications');
+    // const appDir = path.join(__dirname, 'applications');
     const appFiles = await fs.readdir(appDir);
     const staticApps = appFiles
       .map(file => ({
