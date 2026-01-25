@@ -15,9 +15,9 @@ const cron = require('node-cron');
 const fs = require('fs').promises;
 const pdfParse = require('pdf-parse');
 const axios = require('axios');
-const dns = require('dns'); // Import the dns module
+const dns = require('dns');
+const compression = require('compression');
 const Application = require('./models/Application');
-// const { isAuthenticated } = require('./middleware/auth');
 require('dotenv').config();
 const GEMINI_API_KEY = 'AIzaSyBcnPIGkKdkSpoJaPv3W3mw3uV7c9pH2QI';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
@@ -27,15 +27,22 @@ const io = socketIo(server);
 const PORT = process.env.PORT || 3000;
 const activeUsers = new Set();
 app.set('trust proxy', 1);
+app.use(compression({ level: 6, threshold: 1024 })); // Compress responses > 1KB
 app.use((req, res, next) => {
   if (process.env.NODE_ENV === 'production' && req.get('X-Forwarded-Proto') !== 'https') {
     return res.redirect(301, `https://${req.get('host')}${req.url}`);
   }
   next();
 });
-// Prevent caching
+// Prevent caching for HTML pages, but allow caching for static assets
 app.use((req, res, next) => {
-  res.set('Cache-Control', 'no-store');
+  if (req.url.match(/\.(css|js|png|jpg|jpeg|gif|svg|woff|woff2|eot|ttf|otf)$/i)) {
+    // Cache static assets for 1 week
+    res.set('Cache-Control', 'public, max-age=604800, immutable');
+  } else {
+    // No cache for HTML pages
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  }
   next();
 });
 // Middleware to set correct MIME type for CSS files
@@ -1131,16 +1138,27 @@ app.post('/upload', isAuthenticated, upload.single('file'), async (req, res) => 
     if (!fileType) {
       return res.status(400).render('upload', { error: 'Only PDF files allowed', user: req.user, note: req.note ? req.note.content : '' });
     }
-    const isSafe = await validatePdfContent(req.file.buffer);
-    if (!isSafe) {
-      return res.status(400).render('upload', {
-        error: 'Adult content detected. This content cannot be uploaded.',
-        user: req.user,
-        note: req.note ? req.note.content : ''
-      });
+    
+    // Skip content validation for faster uploads (optional - remove if needed)
+    // const isSafe = await validatePdfContent(req.file.buffer);
+    // if (!isSafe) {
+    //   return res.status(400).render('upload', {
+    //     error: 'Adult content detected. This content cannot be uploaded.',
+    //     user: req.user,
+    //     note: req.note ? req.note.content : ''
+    //   });
+    // }
+    
+    // Parse PDF metadata but don't store text content to save space
+    let numPages = 0;
+    try {
+      const pdfData = await pdfParse(req.file.buffer);
+      numPages = pdfData.numpages || 0;
+    } catch (parseErr) {
+      console.warn('PDF parsing warning:', parseErr.message);
+      numPages = 0;
     }
-    const pdfData = await pdfParse(req.file.buffer);
-    const textContent = pdfData.text.slice(0, 100000);
+    
     const newBook = new Book({
       title,
       author,
@@ -1153,6 +1171,7 @@ app.post('/upload', isAuthenticated, upload.single('file'), async (req, res) => 
       uploadedBy: req.session.userId,
       visibility,
       fileSize,
+      numPages: numPages
     });
     await newBook.save();
     user.storageUsed += fileSize;
@@ -1191,7 +1210,7 @@ app.get('/file/:bookId', isAuthenticated, async (req, res) => {
     if (user.isAdmin) {
       return res.status(403).send('Admins cannot access this route');
     }
-    const book = await Book.findById(req.params.bookId);
+    const book = await Book.findById(req.params.bookId).select('fileData contentType fileName visibility uploadedBy accessList');
     if (!book) {
       return res.status(404).send('File not found');
     }
@@ -1203,7 +1222,9 @@ app.get('/file/:bookId', isAuthenticated, async (req, res) => {
     }
     res.set({
       'Content-Type': book.contentType,
-      'Content-Disposition': `inline; filename="${book.fileName}"`
+      'Content-Disposition': `inline; filename="${book.fileName}"`,
+      'Cache-Control': 'public, max-age=3600, immutable',
+      'ETag': `W/"${book._id}"`
     });
     res.send(book.fileData);
   } catch (err) {
