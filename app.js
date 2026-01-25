@@ -800,42 +800,42 @@ app.get('/auth/google/callback', (req, res, next) => {
     }
   })(req, res, next);
 });
-app.get('/', async (req, res) => {
-  try {
-    const totalUsers = await User.countDocuments();
-    // const appDir = path.join(__dirname, 'applications');
-    const appFiles = await fs.readdir(appDir);
-    const staticApps = appFiles
-      .map(file => ({
-        name: path.basename(file, '.js').replace(/-/g, ' ').toUpperCase(),
-        id: path.basename(file, '.js'),
-        iconPath: '/images/default-app-icon.png' // Default icon for static apps
-      }));
-    const userApps = await Application.find({}).select('name _id iconPath');
-    const applications = [
-      ...userApps.map(app => ({
-        id: app._id.toString(),
-        name: app.name,
-        iconPath: app.iconPath
-      }))
-    ];
-    res.render('index', {
-      user: req.user,
-      note: req.note ? req.note.content : '',
-      totalUsers,
-      activeUsers: activeUsers.size,
-      applications
-    });
-  } catch (err) {
-    console.error('Index route error:', err);
-    res.status(500).render('error', {
-      message: 'Failed to load home page',
-      user: req.user,
-      note: req.note ? req.note.content : '',
-      applications: []
-    });
-  }
-});
+// app.get('/', async (req, res) => {
+//   try {
+//     const totalUsers = await User.countDocuments();
+//     // const appDir = path.join(__dirname, 'applications');
+//     const appFiles = await fs.readdir(appDir);
+//     const staticApps = appFiles
+//       .map(file => ({
+//         name: path.basename(file, '.js').replace(/-/g, ' ').toUpperCase(),
+//         id: path.basename(file, '.js'),
+//         iconPath: '/images/default-app-icon.png' // Default icon for static apps
+//       }));
+//     const userApps = await Application.find({}).select('name _id iconPath');
+//     const applications = [
+//       ...userApps.map(app => ({
+//         id: app._id.toString(),
+//         name: app.name,
+//         iconPath: app.iconPath
+//       }))
+//     ];
+//     res.render('index', {
+//       user: req.user,
+//       note: req.note ? req.note.content : '',
+//       totalUsers,
+//       activeUsers: activeUsers.size,
+//       applications
+//     });
+//   } catch (err) {
+//     console.error('Index route error:', err);
+//     res.status(500).render('error', {
+//       message: 'Failed to load home page',
+//       user: req.user,
+//       note: req.note ? req.note.content : '',
+//       applications: []
+//     });
+//   }
+// });
 
 app.get('/infographic', isAuthenticated, (req, res) => {
   try {
