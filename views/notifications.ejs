@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+  <meta name="theme-color" content="#0a66c2">
+  <title>Notifications - BookHive</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/chat.css?v=<%= new Date().getTime() %>">
+  <link rel="stylesheet" href="/css/responsive-zoom.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #0a66c2;
+      --secondary-color: #667eea;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --light: #f8f9fa;
+      --border: #e9ecef;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f9fafb;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* Standard Header - Matches other pages */
+    .header {
+      background-color: #fff;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      padding: 1rem 0;
+      margin-bottom: 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    
+    .header .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo-section {
+      display: flex;
+      align-items: center;
+    }
+
+    .logo-section a {
+      text-decoration: none;
+    }
+
+    .logo-section img {
+      max-width: 150px;
+      height: auto;
+    }
+
+    .nav-menu {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .nav-link {
+      text-decoration: none;
+      color: #666;
+      font-weight: 500;
+      transition: color 0.3s;
+      padding: 0.5rem;
+    }
+
+    .nav-link:hover {
+      color: var(--primary-color, #0a66c2);
+    }
+
+    .nav-link.active {
+      color: var(--primary-color, #0a66c2);
+      border-bottom: 2px solid var(--primary-color, #0a66c2);
+    }
+
+    .hamburger {
+      display: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #333;
+      transition: color 0.3s;
+    }
+
+    .hamburger:hover {
+      color: var(--primary-color, #0a66c2);
+    }
+
+    .main-container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .page-header h1 {
+      font-size: 32px;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .page-header h1 i {
+      font-size: 36px;
+      color: var(--primary-color, #0a66c2);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--primary-color, #0a66c2);
+      color: white;
+      box-shadow: 0 4px 15px rgba(10, 102, 194, 0.4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(10, 102, 194, 0.6);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--primary-color, #0a66c2);
+      border: 2px solid var(--primary-color, #0a66c2);
+    }
+
+    .btn-secondary:hover {
+      background: var(--primary-color, #0a66c2);
+      color: white;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 30px;
+      border-bottom: 2px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      padding: 15px 20px;
+      background: none;
+      border: none;
+      font-size: 16px;
+      font-weight: 600;
+      color: #999;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      position: relative;
+    }
+
+    .tab-btn.active {
+      color: var(--primary-color, #0a66c2);
+      border-bottom-color: var(--primary-color, #0a66c2);
+    }
+
+    .tab-btn:hover {
+      color: var(--primary-color, #0a66c2);
+    }
+
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .notification-item {
+      background: white;
+      border-left: 4px solid var(--primary-color, #0a66c2);
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      display: flex;
+      gap: 15px;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      animation: slideIn 0.4s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .notification-item.unread {
+      background: linear-gradient(135deg, #667eea05 0%, #764ba205 100%);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+    }
+
+    .notification-item.unread::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 10px;
+      height: 10px;
+      background: var(--primary-color, #0a66c2);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7);
+      }
+      50% {
+        box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
+      }
+    }
+
+    .notification-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    }
+
+    .notification-icon {
+      font-size: 24px;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .notification-item.login .notification-icon {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .notification-item.news .notification-icon {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .notification-item.publication .notification-icon {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .notification-item.community .notification-icon {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    .notification-content {
+      flex: 1;
+      position: relative;
+    }
+
+    .notification-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+      gap: 10px;
+    }
+
+    .notification-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .notification-time {
+      font-size: 13px;
+      color: #999;
+    }
+
+    .notification-message {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .notification-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .action-btn.view {
+      background: var(--primary-color, #0a66c2);
+      color: white;
+    }
+
+    .action-btn.view:hover {
+      background: #0851a8;
+    }
+
+    .action-btn.mark-read {
+      background: #e9ecef;
+      color: #666;
+    }
+
+    .action-btn.mark-read:hover {
+      background: #d9dddf;
+    }
+
+    .action-btn.delete {
+      background: #fee;
+      color: var(--danger);
+    }
+
+    .action-btn.delete:hover {
+      background: #fdd;
+    }
+
+    .preferences-section {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .preferences-section h2 {
+      font-size: 22px;
+      color: #333;
+      margin-bottom: 25px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .preference-group {
+      margin-bottom: 25px;
+      padding-bottom: 25px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .preference-group:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .preference-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 15px 0;
+      gap: 15px;
+    }
+
+    .preference-label {
+      flex: 1;
+    }
+
+    .preference-label .label-title {
+      font-weight: 600;
+      color: #333;
+      font-size: 15px;
+      margin-bottom: 5px;
+    }
+
+    .preference-label .label-description {
+      font-size: 13px;
+      color: #999;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 60px;
+      height: 32px;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: 0.4s;
+      border-radius: 32px;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 26px;
+      width: 26px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.4s;
+      border-radius: 50%;
+    }
+
+    input:checked + .toggle-slider {
+      background: linear-gradient(135deg, var(--primary-color, #0a66c2) 0%, #0851a8 100%);
+    }
+
+    input:checked + .toggle-slider:before {
+      transform: translateX(28px);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+
+    .empty-state i {
+      font-size: 64px;
+      margin-bottom: 20px;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-size: 20px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    .empty-state p {
+      font-size: 14px;
+      color: #999;
+    }
+
+    .badge {
+      display: inline-block;
+      background: var(--danger);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 600;
+      min-width: 20px;
+      text-align: center;
+      margin-left: 10px;
+    }
+
+    .save-success {
+      background: #d4edda;
+      color: #155724;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+      animation: slideDown 0.3s ease;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .filter-buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 8px 16px;
+      border: 2px solid var(--border);
+      background: white;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      color: #666;
+    }
+
+    .filter-btn.active {
+      border-color: var(--primary-color, #0a66c2);
+      color: var(--primary-color, #0a66c2);
+      background: #0a66c215;
+    }
+
+    .filter-btn:hover {
+      border-color: var(--primary-color, #0a66c2);
+      color: var(--primary-color, #0a66c2);
+    }
+
+    .notification-type-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-left: 10px;
+    }
+
+    .type-login {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .type-news {
+      background: #fce4ec;
+      color: #c2185b;
+    }
+
+    .type-publication {
+      background: #e0f2f1;
+      color: #00796b;
+    }
+
+    .type-community {
+      background: #f3e5f5;
+      color: #6a1b9a;
+    }
+
+    @media (max-width: 768px) {
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .header-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .nav-menu {
+        display: none;
+      }
+
+      .notification-item {
+        flex-direction: column;
+      }
+
+      .preference-item {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .toggle-switch {
+        align-self: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
+        <div class="logo-section">
+          <a href="/">
+            <img src="/images/logo-removebg-preview.png" alt="BookHive Logo" class="logo">
+          </a>
+        </div>
+        <nav class="nav-menu">
+          <a href="/news" class="nav-link"><i class="fas fa-newspaper"></i> News</a>
+          <a href="/publications" class="nav-link"><i class="fas fa-book-open"></i> Publications</a>
+          <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
+          <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
+          <a href="/notifications" class="nav-link active"><i class="fas fa-bell"></i> Notifications</a>
+          <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <div class="page-header">
+      <h1>
+        <i class="fas fa-bell"></i>
+        Notifications
+        <% if (unreadCount > 0) { %>
+          <span class="badge"><%= unreadCount %></span>
+        <% } %>
+      </h1>
+      <div class="header-actions">
+        <% if (unreadCount > 0) { %>
+          <button class="btn btn-secondary" onclick="markAllRead()">
+            <i class="fas fa-check-double"></i> Mark All Read
+          </button>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('notifications')">
+        <i class="fas fa-inbox"></i> Notifications
+        <% if (unreadCount > 0) { %>
+          <span class="badge"><%= unreadCount %></span>
+        <% } %>
+      </button>
+      <button class="tab-btn" onclick="switchTab('preferences')">
+        <i class="fas fa-cog"></i> Notification Settings
+      </button>
+    </div>
+
+    <!-- Notifications Tab -->
+    <div id="notifications" class="tab-content active">
+      <% if (notifications && notifications.length > 0) { %>
+        <div class="filter-buttons">
+          <button class="filter-btn active" onclick="filterNotifications('all')">All</button>
+          <button class="filter-btn" onclick="filterNotifications('login')">Login</button>
+          <button class="filter-btn" onclick="filterNotifications('news')">News</button>
+          <button class="filter-btn" onclick="filterNotifications('publication')">Publications</button>
+          <button class="filter-btn" onclick="filterNotifications('community')">Community</button>
+        </div>
+
+        <% notifications.forEach(notification => { %>
+          <div class="notification-item <%= notification.type %> <%= !notification.isRead ? 'unread' : '' %>" data-type="<%= notification.type %>" data-id="<%= notification._id %>">
+            <div class="notification-icon">
+              <% if (notification.type === 'login') { %>
+                <i class="fas fa-sign-in-alt"></i>
+              <% } else if (notification.type === 'news') { %>
+                <i class="fas fa-newspaper"></i>
+              <% } else if (notification.type === 'publication') { %>
+                <i class="fas fa-book"></i>
+              <% } else if (notification.type === 'community') { %>
+                <i class="fas fa-comments"></i>
+              <% } else { %>
+                <i class="fas fa-info-circle"></i>
+              <% } %>
+            </div>
+            <div class="notification-content">
+              <div class="notification-header">
+                <div>
+                  <span class="notification-title"><%= notification.title %></span>
+                  <span class="notification-type-badge type-<%= notification.type %>"><%= notification.type %></span>
+                </div>
+                <span class="notification-time"><%= new Date(notification.createdAt).toLocaleDateString() %></span>
+              </div>
+              <p class="notification-message"><%= notification.message %></p>
+              <div class="notification-actions">
+                <% if (notification.link) { %>
+                  <a href="<%= notification.link %>" class="action-btn view">
+                    <i class="fas fa-arrow-right"></i> View
+                  </a>
+                <% } %>
+                <% if (!notification.isRead) { %>
+                  <button class="action-btn mark-read" onclick="markAsRead('<%= notification._id %>')">
+                    <i class="fas fa-check"></i> Mark as Read
+                  </button>
+                <% } %>
+                <button class="action-btn delete" onclick="deleteNotification('<%= notification._id %>')">
+                  <i class="fas fa-trash"></i> Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        <% }); %>
+      <% } else { %>
+        <div class="empty-state">
+          <i class="fas fa-inbox"></i>
+          <h3>No Notifications</h3>
+          <p>You're all caught up! Check back later for updates.</p>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Preferences Tab -->
+    <div id="preferences" class="tab-content">
+      <div class="preferences-section">
+        <h2><i class="fas fa-cog"></i> Notification Settings</h2>
+        <div class="save-success" id="saveSuccess">
+          <i class="fas fa-check-circle"></i> Notification preferences updated successfully!
+        </div>
+
+        <form id="preferencesForm">
+          <!-- Email Notifications -->
+          <div class="preference-group">
+            <h3 style="font-size: 16px; color: #333; margin-bottom: 15px;">
+              <i class="fas fa-envelope" style="color: var(--primary-color, #0a66c2); margin-right: 8px;"></i>
+              Email Notifications
+            </h3>
+
+            <div class="preference-item">
+              <div class="preference-label">
+                <div class="label-title">All Email Notifications</div>
+                <div class="label-description">Master switch for all email notifications</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" name="emailNotifications" <%= notificationPreferences.emailNotifications ? 'checked' : '' %>>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="preference-item" style="padding-top: 0;">
+              <div class="preference-label">
+                <div class="label-title">Login Alerts</div>
+                <div class="label-description">Get notified when someone logs into your account</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" name="loginAlerts" <%= notificationPreferences.loginAlerts ? 'checked' : '' %>>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="preference-item" style="padding-top: 0;">
+              <div class="preference-label">
+                <div class="label-title">News Updates</div>
+                <div class="label-description">Receive updates about new books and content</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" name="newsUpdates" <%= notificationPreferences.newsUpdates ? 'checked' : '' %>>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="preference-item" style="padding-top: 0;">
+              <div class="preference-label">
+                <div class="label-title">Publication Updates</div>
+                <div class="label-description">Get notified about new publications shared by users</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" name="publicationUpdates" <%= notificationPreferences.publicationUpdates ? 'checked' : '' %>>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- In-App & Browser Notifications -->
+          <div class="preference-group">
+            <h3 style="font-size: 16px; color: #333; margin-bottom: 15px;">
+              <i class="fas fa-bell" style="color: var(--primary-color, #0a66c2); margin-right: 8px;"></i>
+              In-App Notifications
+            </h3>
+
+            <div class="preference-item">
+              <div class="preference-label">
+                <div class="label-title">In-App Notifications</div>
+                <div class="label-description">Show notifications inside the BookHive application</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" name="inAppNotifications" <%= notificationPreferences.inAppNotifications ? 'checked' : '' %>>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="preference-item" style="padding-top: 0;">
+              <div class="preference-label">
+                <div class="label-title">Browser Notifications</div>
+                <div class="label-description">Show desktop notifications (if enabled in browser)</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" name="browserNotifications" <%= notificationPreferences.browserNotifications ? 'checked' : '' %>>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="preference-item" style="padding-top: 0;">
+              <div class="preference-label">
+                <div class="label-title">Community Notifications</div>
+                <div class="label-description">Get notified about community activities and comments</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" name="communityNotifications" <%= notificationPreferences.communityNotifications ? 'checked' : '' %>>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Book Updates -->
+          <div class="preference-group">
+            <h3 style="font-size: 16px; color: #333; margin-bottom: 15px;">
+              <i class="fas fa-book" style="color: var(--primary-color, #0a66c2); margin-right: 8px;"></i>
+              Book & Content Updates
+            </h3>
+
+            <div class="preference-item">
+              <div class="preference-label">
+                <div class="label-title">📖 Book Updates</div>
+                <div class="label-description">Get notified when books you follow are updated with new content</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" name="bookUpdates" <%= notificationPreferences.bookUpdates ? 'checked' : '' %>>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="preference-item" style="padding-top: 0;">
+              <div class="preference-label">
+                <div class="label-title">💬 Comment Notifications</div>
+                <div class="label-description">Get notified when someone comments on your publications</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" name="commentNotifications" <%= notificationPreferences.commentNotifications ? 'checked' : '' %>>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="preference-item" style="padding-top: 0;">
+              <div class="preference-label">
+                <div class="label-title">🔊 Sound Notifications</div>
+                <div class="label-description">Play sound when receiving notifications</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" name="soundNotifications" <%= notificationPreferences.soundNotifications ? 'checked' : '' %>>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="margin-top: 20px;">
+            <i class="fas fa-save"></i> Save Preferences
+          </button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Tab switching
+    function switchTab(tabName) {
+      const tabs = document.querySelectorAll('.tab-content');
+      const btns = document.querySelectorAll('.tab-btn');
+
+      tabs.forEach(tab => tab.classList.remove('active'));
+      btns.forEach(btn => btn.classList.remove('active'));
+
+      document.getElementById(tabName).classList.add('active');
+      event.target.closest('.tab-btn').classList.add('active');
+    }
+
+    // Filter notifications
+    function filterNotifications(type) {
+      const items = document.querySelectorAll('.notification-item');
+      const btns = document.querySelectorAll('.filter-btn');
+
+      btns.forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      items.forEach(item => {
+        if (type === 'all' || item.getAttribute('data-type') === type) {
+          item.style.display = '';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    }
+
+    // Mark notification as read
+    async function markAsRead(notificationId) {
+      try {
+        const response = await fetch(`/notifications/mark-read/${notificationId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          document.querySelector(`[data-id="${notificationId}"]`).classList.remove('unread');
+          location.reload();
+        }
+      } catch (err) {
+        console.error('Error marking as read:', err);
+        alert('Failed to mark notification as read');
+      }
+    }
+
+    // Mark all as read
+    async function markAllRead() {
+      try {
+        const response = await fetch('/notifications/mark-all-read', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          location.reload();
+        }
+      } catch (err) {
+        console.error('Error marking all as read:', err);
+        alert('Failed to mark all notifications as read');
+      }
+    }
+
+    // Delete notification
+    async function deleteNotification(notificationId) {
+      if (confirm('Are you sure you want to delete this notification?')) {
+        try {
+          const response = await fetch(`/notifications/${notificationId}`, {
+            method: 'DELETE'
+          });
+
+          if (response.ok) {
+            document.querySelector(`[data-id="${notificationId}"]`).remove();
+            location.reload();
+          }
+        } catch (err) {
+          console.error('Error deleting notification:', err);
+          alert('Failed to delete notification');
+        }
+      }
+    }
+
+    // Save preferences
+    document.getElementById('preferencesForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(e.target);
+      const data = {
+        emailNotifications: formData.has('emailNotifications'),
+        loginAlerts: formData.has('loginAlerts'),
+        newsUpdates: formData.has('newsUpdates'),
+        publicationUpdates: formData.has('publicationUpdates'),
+        communityNotifications: formData.has('communityNotifications'),
+        browserNotifications: formData.has('browserNotifications'),
+        inAppNotifications: formData.has('inAppNotifications'),
+        bookUpdates: formData.has('bookUpdates'),
+        commentNotifications: formData.has('commentNotifications'),
+        soundNotifications: formData.has('soundNotifications')
+      };
+
+      try {
+        const response = await fetch('/notifications/preferences', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+          const successMsg = document.getElementById('saveSuccess');
+          successMsg.style.display = 'block';
+          setTimeout(() => {
+            successMsg.style.display = 'none';
+          }, 3000);
+        } else {
+          alert('Failed to save preferences');
+        }
+      } catch (err) {
+        console.error('Error saving preferences:', err);
+        alert('Failed to save preferences');
+      }
+    });
+
+    // Request browser notification permission
+    if (Notification.permission === 'default') {
+      const browserNotifCheckbox = document.querySelector('input[name="browserNotifications"]');
+      if (browserNotifCheckbox && browserNotifCheckbox.checked) {
+        Notification.requestPermission();
+      }
+    }
+  </script>
+</body>
+</html>

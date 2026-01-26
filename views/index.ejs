@@ -769,7 +769,7 @@
           <a href="/publications" class="nav-link"><i class="fas fa-book-open"></i> Publications</a>
           <a href="/bookhive" class="nav-link"><i class="fas fa-book"></i> BookHive</a>
           <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
-          <!-- <a href="/account" class="nav-link"><i class="fas fa-user"></i> Account</a> -->
+          <a href="/notifications" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
           <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
         <% } else { %>
           <a href="#" class="nav-link" id="loginLink"><i class="fas fa-sign-in-alt"></i> Login</a>
@@ -1204,5 +1204,11 @@
   </script>
   <!-- Responsive Handler Script -->
   <script src="/js/responsive-handler.js"></script>
+  <!-- Real-time Notifications Script -->
+  <script src="/js/notifications-realtime.js"></script>
+  <% if (user) { %>
+    <span data-user-id="<%= user._id %>" style="display:none;"></span>
+    <div data-notification-badge style="display:none; position: absolute; top: 10px; right: 10px; background: #ef4444; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;">0</div>
+  <% } %>
 </body>
 </html>

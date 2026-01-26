@@ -17,7 +17,11 @@ const pdfParse = require('pdf-parse');
 const axios = require('axios');
 const dns = require('dns');
 const compression = require('compression');
+const sharp = require('sharp');
+const { GridFSBucket } = require('mongodb');
 const Application = require('./models/Application');
+const emailTemplates = require('./config/email-templates');
+const { extractTextByType, generateThumbnail, getFileTypeFromMime, validateFileContent } = require('./config/document-processor');
 require('dotenv').config();
 
 // Environment variables
@@ -195,17 +199,14 @@ passport.use(new GoogleStrategy({
     });
     await newNote.save();
     try {
+      const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+      const emailTemplate = emailTemplates.welcomeEmail(user.username, baseUrl);
       const mailOptions = {
         from: `"BookHive Team" <${process.env.EMAIL_USER}>`,
         to: user.email,
-        subject: 'Welcome to BookHive!',
-        html: `
-          <h2>Welcome to BookHive, ${user.username}!</h2>
-          <p>Thank you for joining our community. Explore, upload, and share your favorite books with BookHive.</p>
-          <p>Get started by visiting your <a href="https://bookhive-rsd.onrender.com/bookhive">Library</a>.</p>
-          <p>Best regards,<br>BookHive Team</p>
-        `,
-        text: `Welcome to BookHive, ${user.username}!\n\nThank you for joining our community. Explore, upload, and share your favorite books with BookHive.\n\nGet started by visiting your Library: https://bookhive-rsd.onrender.com/bookhive\n\nBest regards,\nBookHive Team`,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+        text: `Welcome to BookHive, ${user.username}!\n\nThank you for joining our community. Explore, upload, and share your favorite books with BookHive.\n\nGet started by visiting: ${baseUrl}/bookhive\n\nBest regards,\nBookHive Team`,
         headers: {
             'X-Priority': '3',
             'X-MSMail-Priority': 'Normal',
@@ -233,17 +234,33 @@ const userSchema = new mongoose.Schema({
   storageUsed: { type: Number, default: 0 },
   storageLimit: { type: Number, default: 1024 * 1024 * 1024 },
   pinnedBooks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Book' }],
-  isAdmin: { type: Boolean, default: false }
+  isAdmin: { type: Boolean, default: false },
+  // Notification preferences
+  notificationPreferences: {
+    emailNotifications: { type: Boolean, default: true },
+    loginAlerts: { type: Boolean, default: true },
+    newsUpdates: { type: Boolean, default: true },
+    publicationUpdates: { type: Boolean, default: true },
+    communityNotifications: { type: Boolean, default: true },
+    browserNotifications: { type: Boolean, default: true },
+    inAppNotifications: { type: Boolean, default: true },
+    bookUpdates: { type: Boolean, default: true },
+    commentNotifications: { type: Boolean, default: true }
+  },
+  lastLogin: { type: Date }
 });
 const bookSchema = new mongoose.Schema({
   title: { type: String, required: true },
   author: { type: String, required: true },
   fileName: { type: String, required: true },
-  fileData: { type: Buffer, required: true },
-  fileType: { type: String, required: true, enum: ['pdf'] },
+  fileId: { type: mongoose.Schema.Types.ObjectId, required: true }, // Store GridFS file ID instead of buffer
+  fileData: { type: Buffer }, // Keep for backward compatibility (will be migrated)
+  fileType: { type: String, required: true, enum: ['pdf', 'docx', 'image'] },
   contentType: { type: String, required: true },
   thumbnail: { type: Buffer },
   thumbnailType: { type: String },
+  coverImage: { type: Buffer }, // Custom book cover image uploaded by user
+  coverImageType: { type: String }, // MIME type of custom cover (e.g., 'image/jpeg')
   description: { type: String },
   tags: [{ type: String }],
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -252,6 +269,8 @@ const bookSchema = new mongoose.Schema({
   visibility: { type: String, enum: ['private', 'public', 'restricted'], default: 'private' },
   accessList: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   pinCount: { type: Number, default: 0 },
+  numPages: { type: Number, default: 0 },
+  extractedText: { type: String, default: '' }
 });
 const requestSchema = new mongoose.Schema({
   book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', required: true },
@@ -335,6 +354,18 @@ const commentSchema = new mongoose.Schema({
   content: { type: String, required: true },
   createdAt: { type: Date, default: Date.now }
 });
+
+const notificationSchema = new mongoose.Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  type: { type: String, enum: ['login', 'news', 'publication', 'community', 'system', 'book-update', 'comment', 'message'], required: true },
+  title: { type: String, required: true },
+  message: { type: String, required: true },
+  link: { type: String }, // Link to the relevant page
+  isRead: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now, index: { expires: 2592000 } }, // Auto-delete after 30 days
+  relatedId: { type: mongoose.Schema.Types.ObjectId }, // Reference to news, publication, book, etc.
+  priority: { type: String, enum: ['low', 'normal', 'high'], default: 'normal' }
+});
 const privateChatRequestSchema = new mongoose.Schema({
   requester: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   recipient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -377,6 +408,7 @@ const News = mongoose.model('News', newsSchema);
 const Publication = mongoose.model('Publication', publicationSchema);
 const Comment = mongoose.model('Comment', commentSchema);
 const ChatbotFeedback = mongoose.model('ChatbotFeedback', chatbotFeedbackSchema);
+const Notification = mongoose.model('Notification', notificationSchema);
 // Multer for publications (support multiple files: images and PDFs)
 const publicationUploadConfig = multer({
   storage: multer.memoryStorage(),
@@ -448,6 +480,18 @@ mongoose.connect(MONGODB_URI, {
   useUnifiedTopology: true
 }).then(async () => {
   console.log('Connected to MongoDB');
+  
+  // Initialize GridFS bucket for file storage
+  try {
+    const gfs = new GridFSBucket(mongoose.connection.db, {
+      bucketName: 'files'
+    });
+    global.gfs = gfs; // Make it globally accessible
+    console.log('GridFS bucket initialized');
+  } catch (gridFsErr) {
+    console.warn('Warning: GridFS bucket initialization failed:', gridFsErr.message);
+  }
+  
   try {
     const adminExists = await User.findOne({ username: 'admin' });
     if (!adminExists) {
@@ -473,6 +517,206 @@ mongoose.connect(MONGODB_URI, {
 }).catch(err => {
   console.error('MongoDB connection error:', err);
 });
+
+// ============== NOTIFICATION HELPER FUNCTIONS ==============
+
+// Enhanced helper function to send email and create in-app notification with real-time Socket.io
+async function sendNotification(userId, notificationType, title, message, emailDetails = null, link = null, relatedId = null) {
+  try {
+    const user = await User.findById(userId);
+    if (!user) return;
+
+    // Create in-app notification if enabled
+    if (user.notificationPreferences.inAppNotifications) {
+      const notification = new Notification({
+        user: userId,
+        type: notificationType,
+        title,
+        message,
+        link,
+        relatedId
+      });
+      await notification.save();
+    }
+
+    // Send email if enabled and email notifications are on
+    if (emailDetails && user.notificationPreferences.emailNotifications) {
+      const emailConfig = emailDetails;
+      const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+      emailConfig.html = emailConfig.html.replace(/\[BASE_URL\]/g, baseUrl);
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: user.email,
+        subject: emailConfig.subject,
+        html: emailConfig.html
+      };
+
+      await transporter.sendMail(mailOptions);
+    }
+
+    // Emit real-time notification via Socket.io
+    io.to(userId.toString()).emit('notificationAlert', {
+      type: notificationType,
+      title,
+      message,
+      link,
+      timestamp: new Date()
+    });
+
+    return true;
+  } catch (err) {
+    console.error('Error sending notification:', err);
+  }
+}
+
+// Enhanced login alert with real-time notification
+async function sendLoginAlert(user, ipAddress, userAgent) {
+  if (!user.notificationPreferences.loginAlerts) return;
+
+  try {
+    const emailTemplate = emailTemplates.loginAlert(
+      user.username,
+      new Date(),
+      userAgent,
+      ipAddress
+    );
+
+    await sendNotification(
+      user._id,
+      'login',
+      '🔐 Login Detected',
+      `New login to your account at ${new Date().toLocaleString()}`,
+      emailTemplate,
+      '/account'
+    );
+
+    // Also emit real-time login alert
+    io.to(user._id.toString()).emit('loginAlert', {
+      device: userAgent ? userAgent.substring(0, 50) : 'Unknown Device',
+      ipAddress
+    });
+  } catch (err) {
+    console.error('Error sending login alert:', err);
+  }
+}
+
+// Enhanced news broadcast with real-time notification
+async function broadcastNewsNotification(newsId, newsTitle, newsContent) {
+  try {
+    const users = await User.find({ 'notificationPreferences.newsUpdates': true });
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+
+    for (const user of users) {
+      const emailTemplate = emailTemplates.newsUpdate(
+        user.username,
+        newsTitle,
+        newsContent.substring(0, 200) + '...',
+        `${baseUrl}/news`
+      );
+
+      await sendNotification(
+        user._id,
+        'news',
+        '📰 News Update',
+        newsTitle,
+        emailTemplate,
+        '/news',
+        newsId
+      );
+
+      // Emit real-time news alert
+      io.to(user._id.toString()).emit('newsAlert', {
+        title: newsTitle,
+        newsId
+      });
+    }
+  } catch (err) {
+    console.error('Error sending news notification:', err);
+  }
+}
+
+// Enhanced publication broadcast with real-time notification
+async function broadcastPublicationNotification(publicationId, authorId, authorName, publicationPreview) {
+  try {
+    const users = await User.find({ 
+      'notificationPreferences.publicationUpdates': true,
+      _id: { $ne: authorId }  // Exclude the author who published it
+    });
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+
+    for (const user of users) {
+      const emailTemplate = emailTemplates.publicationUpdate(
+        user.username,
+        authorName,
+        publicationPreview.substring(0, 200) + '...',
+        `${baseUrl}/publications`
+      );
+
+      await sendNotification(
+        user._id,
+        'publication',
+        '📚 New Publication',
+        `New publication by ${authorName}`,
+        emailTemplate,
+        '/publications',
+        publicationId
+      );
+
+      // Emit real-time publication alert
+      io.to(user._id.toString()).emit('publicationAlert', {
+        title: publicationPreview.substring(0, 100),
+        author: authorName,
+        publicationId
+      });
+    }
+  } catch (err) {
+    console.error('Error sending publication notification:', err);
+  }
+}
+
+// NEW: Book update broadcast notification - MOST IMPORTANT
+async function broadcastBookUpdateNotification(publicationId, bookTitle, authorName, updateSummary) {
+  try {
+    const users = await User.find({ 'notificationPreferences.bookUpdates': true });
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    const bookLink = `${baseUrl}/publications/${publicationId}`;
+
+    for (const user of users) {
+      const emailTemplate = emailTemplates.bookUpdate(
+        user.username,
+        bookTitle,
+        authorName,
+        updateSummary.substring(0, 300),
+        bookLink
+      );
+
+      await sendNotification(
+        user._id,
+        'book-update',
+        '📖 Book Updated',
+        `"${bookTitle}" by ${authorName} has been updated!`,
+        emailTemplate,
+        bookLink,
+        publicationId
+      );
+
+      // Emit real-time book update alert - with high priority
+      io.to(user._id.toString()).emit('bookUpdate', {
+        bookTitle,
+        author: authorName,
+        updateSummary: updateSummary.substring(0, 200),
+        publicationId,
+        timestamp: new Date()
+      });
+    }
+  } catch (err) {
+    console.error('Error sending book update notification:', err);
+  }
+}
+
+// ============== END NOTIFICATION HELPER FUNCTIONS ==============
+
 // Nodemailer configuration
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -486,15 +730,24 @@ const transporter = nodemailer.createTransport({
   rateLimit: 1, 
   maxMessages: 20
 });
-// Multer for file uploads (PDFs)
+// Multer for file uploads (PDF, DOCX, Images)
 const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['application/pdf'];
+    const allowedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-word.document.macroEnabled.12',
+      'application/msword',
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp'
+    ];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF files are allowed'), false);
+      cb(new Error('Only PDF, DOCX, and image files (JPG, PNG, GIF, WebP) are allowed'), false);
     }
   },
   limits: { fileSize: 500 * 1024 * 1024 }
@@ -535,11 +788,6 @@ const ApplicationImageUpload = multer({
   },
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
-// Helper function for file type
-function getFileTypeFromMime(mimeType) {
-  if (mimeType === 'application/pdf') return 'pdf';
-  return null;
-}
 // Authentication middleware
 const isAuthenticated = (req, res, next) => {
   if (req.session.userId || req.isAuthenticated()) {
@@ -962,17 +1210,14 @@ app.post('/signup', async (req, res) => {
     });
     await newNote.save();
     try {
+      const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+      const emailTemplate = emailTemplates.welcomeEmail(newUser.username, baseUrl);
       const mailOptions = {
         from: `"BookHive Team" <${process.env.EMAIL_USER}>`,
         to: newUser.email,
-        subject: 'Welcome to BookHive!',
-        html: `
-          <h2>Welcome to BookHive, ${newUser.username}!</h2>
-          <p>Thank you for joining our community. Explore, upload, and share your favorite books with BookHive.</p>
-          <p>Get started by visiting your <a href="https://bookhive-rsd.onrender.com/bookhive">BookHive Dashboard</a>.</p>
-          <p>Best regards,<br>BookHive Team</p>
-        `,
-        text: `Welcome to BookHive, ${newUser.username}!\n\nThank you for joining our community. Explore, upload, and share your favorite books with BookHive.\n\nGet started by visiting your BookHive Dashboard: https://bookhive-rsd.onrender.com/bookhive\n\nBest regards,\nBookHive Team`,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+        text: `Welcome to BookHive, ${newUser.username}!\n\nThank you for joining our community. Explore, upload, and share your favorite books with BookHive.\n\nGet started by visiting: ${baseUrl}/bookhive\n\nBest regards,\nBookHive Team`,
         headers: {
             'X-Priority': '3',
             'X-MSMail-Priority': 'Normal',
@@ -1007,8 +1252,19 @@ app.post('/login', async (req, res) => {
     if (!isMatch) {
       return res.status(400).render('login', { error: 'Invalid credentials', user: req.user, note: req.note ? req.note.content : '' });
     }
+    
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
+    
     req.session.userId = user._id;
     req.session.lastActivity = Date.now();
+    
+    // Send login notification
+    const ipAddress = req.ip || req.connection.remoteAddress || 'Unknown';
+    const userAgent = req.get('user-agent') || 'Unknown';
+    await sendLoginAlert(user, ipAddress, userAgent);
+    
     if (user.isAdmin) {
       res.redirect('/admin');
     } else {
@@ -1029,6 +1285,163 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
   });
 });
+
+// ============== NOTIFICATION ROUTES ==============
+
+// Get notifications page
+app.get('/notifications', isAuthenticated, async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.isAdmin) {
+      return res.redirect('/admin');
+    }
+    
+    const notifications = await Notification.find({ user: user._id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+    
+    const unreadCount = notifications.filter(n => !n.isRead).length;
+    
+    res.render('notifications', {
+      user,
+      notifications,
+      unreadCount,
+      notificationPreferences: user.notificationPreferences,
+      note: req.note ? req.note.content : ''
+    });
+  } catch (err) {
+    console.error('Notifications page error:', err);
+    res.status(500).render('error', { 
+      message: 'Failed to load notifications', 
+      user: req.user, 
+      note: req.note ? req.note.content : '' 
+    });
+  }
+});
+
+// Mark notification as read
+app.post('/notifications/mark-read/:notificationId', isAuthenticated, async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    const notification = await Notification.findByIdAndUpdate(
+      notificationId,
+      { isRead: true },
+      { new: true }
+    );
+    
+    res.json({ success: true, notification });
+  } catch (err) {
+    console.error('Mark notification read error:', err);
+    res.status(500).json({ success: false, message: 'Failed to mark notification as read' });
+  }
+});
+
+// Mark all notifications as read
+app.post('/notifications/mark-all-read', isAuthenticated, async (req, res) => {
+  try {
+    await Notification.updateMany(
+      { user: req.user._id, isRead: false },
+      { isRead: true }
+    );
+    
+    res.json({ success: true, message: 'All notifications marked as read' });
+  } catch (err) {
+    console.error('Mark all notifications read error:', err);
+    res.status(500).json({ success: false, message: 'Failed to mark all notifications as read' });
+  }
+});
+
+// Delete notification
+app.delete('/notifications/:notificationId', isAuthenticated, async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    await Notification.findByIdAndDelete(notificationId);
+    
+    res.json({ success: true, message: 'Notification deleted' });
+  } catch (err) {
+    console.error('Delete notification error:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete notification' });
+  }
+});
+
+// Get notification preferences
+app.get('/notifications/preferences', isAuthenticated, (req, res) => {
+  res.json({
+    success: true,
+    preferences: req.user.notificationPreferences
+  });
+});
+
+// Update notification preferences
+app.post('/notifications/preferences', isAuthenticated, async (req, res) => {
+  try {
+    const user = req.user;
+    const {
+      emailNotifications,
+      loginAlerts,
+      newsUpdates,
+      publicationUpdates,
+      communityNotifications,
+      browserNotifications,
+      inAppNotifications,
+      bookUpdates,
+      commentNotifications,
+      soundNotifications
+    } = req.body;
+
+    user.notificationPreferences = {
+      emailNotifications: emailNotifications !== false,
+      loginAlerts: loginAlerts !== false,
+      newsUpdates: newsUpdates !== false,
+      publicationUpdates: publicationUpdates !== false,
+      communityNotifications: communityNotifications !== false,
+      browserNotifications: browserNotifications !== false,
+      inAppNotifications: inAppNotifications !== false,
+      bookUpdates: bookUpdates !== false,
+      commentNotifications: commentNotifications !== false,
+      soundNotifications: soundNotifications !== false
+    };
+
+    await user.save();
+
+    const isAjax = req.get('X-Requested-With') === 'XMLHttpRequest';
+    if (isAjax) {
+      return res.json({ success: true, message: 'Notification preferences updated' });
+    }
+
+    res.redirect('/account');
+  } catch (err) {
+    console.error('Update preferences error:', err);
+    const isAjax = req.get('X-Requested-With') === 'XMLHttpRequest';
+    if (isAjax) {
+      return res.status(500).json({ success: false, message: 'Failed to update preferences' });
+    }
+    res.status(500).render('error', { 
+      message: 'Failed to update notification preferences', 
+      user: req.user, 
+      note: req.note ? req.note.content : '' 
+    });
+  }
+});
+
+// Get unread notification count (for header badge)
+app.get('/notifications/unread-count', isAuthenticated, async (req, res) => {
+  try {
+    const count = await Notification.countDocuments({
+      user: req.user._id,
+      isRead: false
+    });
+    
+    res.json({ success: true, count });
+  } catch (err) {
+    console.error('Unread count error:', err);
+    res.status(500).json({ success: false, count: 0 });
+  }
+});
+
+// ============== END NOTIFICATION ROUTES ==============
+
 app.get('/library', isAuthenticated, async (req, res) => {
   try {
     const user = req.user;
@@ -1129,31 +1542,81 @@ app.post('/upload', isAuthenticated, upload.single('file'), async (req, res) => 
     }
     const fileType = getFileTypeFromMime(req.file.mimetype);
     if (!fileType) {
-      return res.status(400).render('upload', { error: 'Only PDF files allowed', user: req.user, note: req.note ? req.note.content : '' });
+      return res.status(400).render('upload', { error: 'File type not supported. Allowed: PDF, DOCX, and images (JPG, PNG, GIF, WebP)', user: req.user, note: req.note ? req.note.content : '' });
     }
     
+    // Validate file content
+    const isValidFile = await validateFileContent(req.file.buffer, fileType);
+    if (!isValidFile) {
+      return res.status(400).render('upload', { error: 'File appears to be corrupted or invalid', user: req.user, note: req.note ? req.note.content : '' });
+    }
+    
+    // Extract text and metadata
     let numPages = 0;
+    let extractedText = '';
     try {
-      const pdfData = await pdfParse(req.file.buffer);
-      numPages = pdfData.numpages || 0;
+      const textData = await extractTextByType(req.file.buffer, fileType);
+      numPages = textData.pages || 0;
+      extractedText = textData.text ? textData.text.substring(0, 10000) : ''; // Store first 10k chars for search
     } catch (parseErr) {
-      console.warn('PDF parsing warning:', parseErr.message);
+      console.warn(`Warning: Error extracting text from ${fileType}:`, parseErr.message);
       numPages = 0;
+      extractedText = '';
     }
     
+    // Generate thumbnail
+    let thumbnail = null;
+    let thumbnailType = null;
+    try {
+      thumbnail = await generateThumbnail(req.file.buffer, req.file.mimetype);
+      thumbnailType = 'image/png';
+    } catch (thumbErr) {
+      console.warn('Warning: Error generating thumbnail:', thumbErr.message);
+    }
+
+    // Upload file to GridFS
+    let fileId;
+    try {
+      const uploadStream = global.gfs.openUploadStream(req.file.originalname, {
+        metadata: {
+          uploadedBy: req.session.userId,
+          uploadDate: new Date(),
+          fileType: fileType,
+          contentType: req.file.mimetype
+        }
+      });
+      
+      await new Promise((resolve, reject) => {
+        uploadStream.on('error', reject);
+        uploadStream.on('finish', () => {
+          fileId = uploadStream.id;
+          resolve();
+        });
+        uploadStream.end(req.file.buffer);
+      });
+      
+      console.log(`File uploaded to GridFS with ID: ${fileId}`);
+    } catch (gridFsErr) {
+      console.error('GridFS upload error:', gridFsErr);
+      return res.status(500).render('upload', { error: 'Failed to store file: ' + gridFsErr.message, user: req.user, note: req.note ? req.note.content : '' });
+    }
+
     const newBook = new Book({
       title,
       author,
       fileName: req.file.originalname,
-      fileData: req.file.buffer,
+      fileId: fileId, // Store GridFS file ID
       fileType,
       contentType: req.file.mimetype,
+      thumbnail,
+      thumbnailType,
       description,
       tags: tagArray,
       uploadedBy: req.session.userId,
       visibility,
       fileSize,
-      numPages: numPages
+      numPages: numPages,
+      extractedText: extractedText
     });
     await newBook.save();
     user.storageUsed += fileSize;
@@ -1180,7 +1643,8 @@ app.get('/view/:bookId', isAuthenticated, async (req, res) => {
     if (!isOwner && !isPublic && !hasAccess) {
       return res.status(403).render('error', { message: 'Access denied', user: req.user, note: req.note ? req.note.content : '' });
     }
-    res.render('pdf-viewer', { book, user: req.user, note: req.note ? req.note.content : '', isPubDoc: false });
+    // Use the new universal viewer
+    res.render('universal-viewer', { book, user: req.user, note: req.note ? req.note.content : '', isPubDoc: false });
   } catch (err) {
     console.error('View error:', err);
     res.status(500).render('error', { message: 'Failed to load file', user: req.user, note: req.note ? req.note.content : '' });
@@ -1192,7 +1656,7 @@ app.get('/file/:bookId', isAuthenticated, async (req, res) => {
     if (user.isAdmin) {
       return res.status(403).send('Admins cannot access this route');
     }
-    const book = await Book.findById(req.params.bookId).select('fileData contentType fileName visibility uploadedBy accessList');
+    const book = await Book.findById(req.params.bookId).select('fileId fileData contentType fileName visibility uploadedBy accessList');
     if (!book) {
       return res.status(404).send('File not found');
     }
@@ -1202,34 +1666,91 @@ app.get('/file/:bookId', isAuthenticated, async (req, res) => {
     if (!isOwner && !isPublic && !hasAccess) {
       return res.status(403).send('Access denied');
     }
+    
     res.set({
       'Content-Type': book.contentType,
       'Content-Disposition': `inline; filename="${book.fileName}"`,
       'Cache-Control': 'public, max-age=3600, immutable',
       'ETag': `W/"${book._id}"`
     });
-    res.send(book.fileData);
+    
+    // Try GridFS first, fall back to direct buffer for backward compatibility
+    if (book.fileId && global.gfs) {
+      try {
+        const downloadStream = global.gfs.openDownloadStream(book.fileId);
+        downloadStream.pipe(res);
+        downloadStream.on('error', () => {
+          // If GridFS fails, try fileData fallback
+          if (book.fileData) {
+            res.send(book.fileData);
+          } else {
+            res.status(404).send('File not found');
+          }
+        });
+      } catch (gridFsErr) {
+        console.warn('GridFS error, using fileData fallback:', gridFsErr.message);
+        if (book.fileData) {
+          res.send(book.fileData);
+        } else {
+          res.status(500).send('Failed to load file');
+        }
+      }
+    } else if (book.fileData) {
+      // Fallback for old documents
+      res.send(book.fileData);
+    } else {
+      res.status(404).send('File not found');
+    }
   } catch (err) {
     console.error('File fetch error:', err);
     res.status(500).send('Failed to load file');
   }
 });
+
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end(); // No content - prevents 404 errors
+});
+
 app.get('/thumbnail/:bookId', async (req, res) => {
   try {
-    const book = await Book.findById(req.params.bookId);
-    if (!book || !book.thumbnail) {
-      return res.sendFile(path.join(__dirname, 'public', 'images', 'default-thumbnail.jpg'), (err) => {
-        if (err) {
-          console.error('Default thumbnail error:', err);
-          res.status(404).send('Thumbnail not found');
-        }
+    const book = await Book.findById(req.params.bookId).select('coverImage coverImageType thumbnail thumbnailType visibility uploadedBy');
+    
+    // Return custom cover if available
+    if (book && book.coverImage && book.coverImageType) {
+      res.set({
+        'Content-Type': book.coverImageType,
+        'Content-Disposition': `inline; filename="cover-${book._id}.jpg"`
       });
+      return res.send(book.coverImage);
     }
-    res.set({
-      'Content-Type': book.thumbnailType || 'image/jpeg',
-      'Content-Disposition': `inline; filename="thumbnail-${book._id}.jpg"`
-    });
-    res.send(book.thumbnail);
+
+    // Fall back to generated thumbnail
+    if (book && book.thumbnail) {
+      res.set({
+        'Content-Type': book.thumbnailType || 'image/png',
+        'Content-Disposition': `inline; filename="thumbnail-${book._id}.png"`
+      });
+      return res.send(book.thumbnail);
+    }
+
+    // Return default placeholder
+    res.set('Content-Type', 'image/svg+xml');
+    const placeholderSvg = `<svg width="300" height="450" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#f3f4f6;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#e5e7eb;stop-opacity:1" />
+        </linearGradient>
+        <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse">
+          <circle cx="10" cy="10" r="2" fill="#d1d5db" opacity="0.5"/>
+        </pattern>
+      </defs>
+      <rect width="300" height="450" fill="url(#grad)"/>
+      <rect width="300" height="450" fill="url(#dots)"/>
+      <text x="150" y="200" font-family="Arial, sans-serif" font-size="48" fill="#9ca3af" text-anchor="middle" opacity="0.6">📖</text>
+      <text x="150" y="260" font-family="Arial, sans-serif" font-size="16" fill="#6b7280" text-anchor="middle">No Cover</text>
+    </svg>`;
+    res.send(placeholderSvg);
   } catch (err) {
     console.error('Thumbnail fetch error:', err);
     res.status(500).send('Failed to load thumbnail');
@@ -1327,6 +1848,243 @@ app.delete('/book/:bookId/access/:userId', isAuthenticated, async (req, res) => 
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
+// NEW: Update book with notifications
+app.post('/book/:bookId/update', isAuthenticated, upload.single('file'), async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.isAdmin) {
+      return res.status(403).json({ success: false, message: 'Admins cannot update books' });
+    }
+
+    const book = await Book.findById(req.params.bookId);
+    if (!book) {
+      return res.status(404).json({ success: false, message: 'Book not found' });
+    }
+
+    if (book.uploadedBy.toString() !== req.session.userId) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    // If a new file is provided, update it
+    if (req.file) {
+      const newFileSize = req.file.size;
+      const sizeDifference = newFileSize - book.fileSize;
+
+      if (user.storageUsed + sizeDifference > user.storageLimit) {
+        return res.status(400).json({ success: false, message: 'Storage limit exceeded after update' });
+      }
+
+      // Validate new file
+      const isValidFile = await validateFileContent(req.file.buffer, book.fileType);
+      if (!isValidFile) {
+        return res.status(400).json({ success: false, message: 'Updated file appears to be corrupted' });
+      }
+
+      // Extract text from new file
+      let extractedText = '';
+      let numPages = 0;
+      try {
+        const textData = await extractTextByType(req.file.buffer, book.fileType);
+        numPages = textData.pages || book.numPages;
+        extractedText = textData.text ? textData.text.substring(0, 10000) : '';
+      } catch (parseErr) {
+        console.warn('Warning: Error extracting text from updated file:', parseErr.message);
+      }
+
+      // Generate new thumbnail
+      let thumbnail = null;
+      let thumbnailType = null;
+      try {
+        thumbnail = await generateThumbnail(req.file.buffer, req.file.mimetype);
+        thumbnailType = 'image/png';
+      } catch (thumbErr) {
+        console.warn('Warning: Error generating thumbnail:', thumbErr.message);
+      }
+
+      // Update book
+      book.fileData = req.file.buffer;
+      book.fileSize = newFileSize;
+      book.contentType = req.file.mimetype;
+      book.fileName = req.file.originalname;
+      book.extractedText = extractedText;
+      book.numPages = numPages;
+      if (thumbnail) {
+        book.thumbnail = thumbnail;
+        book.thumbnailType = thumbnailType;
+      }
+    }
+
+    // Update metadata if provided
+    if (req.body.title) book.title = req.body.title;
+    if (req.body.author) book.author = req.body.author;
+    if (req.body.description) book.description = req.body.description;
+    if (req.body.tags) {
+      book.tags = req.body.tags.split(',').map(tag => tag.trim());
+    }
+
+    // Update file size used
+    if (req.file) {
+      user.storageUsed += (req.file.size - book.fileSize);
+      await user.save();
+    }
+
+    await book.save();
+
+    // Send book update notifications to users with bookUpdates preference enabled
+    if (book.visibility === 'public' && req.body.notifyUsers === 'true') {
+      const updateSummary = req.body.updateSummary || `Updated with new content. Changes include: File updated by ${user.username}.`;
+      await broadcastBookUpdateNotification(
+        book._id,
+        book.title,
+        book.author,
+        updateSummary
+      );
+    }
+
+    res.json({ success: true, message: 'Book updated successfully' });
+  } catch (err) {
+    console.error('Book update error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Failed to update book' });
+  }
+});
+
+// Upload custom book cover image
+app.post('/book/:bookId/upload-cover', isAuthenticated, upload.single('coverImage'), async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.isAdmin) {
+      return res.status(403).json({ success: false, message: 'Admins cannot upload covers' });
+    }
+
+    const book = await Book.findById(req.params.bookId);
+    if (!book) {
+      return res.status(404).json({ success: false, message: 'Book not found' });
+    }
+
+    if (book.uploadedBy.toString() !== req.session.userId) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image file provided' });
+    }
+
+    console.log('Cover upload attempt - File:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      bufferSize: req.file.buffer ? req.file.buffer.length : 'no buffer'
+    });
+
+    // Validate image file type
+    const allowedImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedImageTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({ success: false, message: 'Only image files are allowed (JPG, PNG, GIF, WebP)' });
+    }
+
+    // Validate file size (max 5MB for cover)
+    if (req.file.size > 5 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: 'Image file too large (max 5MB)' });
+    }
+
+    // Resize and optimize the cover image
+    let coverImage = null;
+    try {
+      if (!req.file.buffer || req.file.buffer.length === 0) {
+        return res.status(400).json({ success: false, message: 'Invalid file buffer' });
+      }
+      
+      const sharpInstance = sharp(req.file.buffer, { failOn: 'none' });
+      const metadata = await sharpInstance.metadata();
+      console.log('Image metadata:', metadata);
+      
+      coverImage = await sharp(req.file.buffer)
+        .resize(300, 450, { fit: 'cover', position: 'center', withoutEnlargement: true })
+        .png({ quality: 80 })
+        .toBuffer();
+      
+      if (!coverImage || coverImage.length === 0) {
+        return res.status(400).json({ success: false, message: 'Failed to process image' });
+      }
+    } catch (imageErr) {
+      console.error('Image processing error:', imageErr);
+      return res.status(400).json({ success: false, message: `Invalid image file: ${imageErr.message}` });
+    }
+
+    // Update the book with custom cover
+    book.coverImage = coverImage;
+    book.coverImageType = 'image/png';
+    await book.save();
+
+    res.json({ success: true, message: 'Cover image uploaded successfully' });
+  } catch (err) {
+    console.error('Cover upload error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Failed to upload cover' });
+  }
+});
+
+// Delete custom book cover image
+app.delete('/book/:bookId/cover', isAuthenticated, async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.isAdmin) {
+      return res.status(403).json({ success: false, message: 'Admins cannot delete covers' });
+    }
+
+    const book = await Book.findById(req.params.bookId);
+    if (!book) {
+      return res.status(404).json({ success: false, message: 'Book not found' });
+    }
+
+    if (book.uploadedBy.toString() !== req.session.userId) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    book.coverImage = null;
+    book.coverImageType = null;
+    await book.save();
+
+    res.json({ success: true, message: 'Cover image removed' });
+  } catch (err) {
+    console.error('Cover deletion error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Failed to delete cover' });
+  }
+});
+
+// Get book cover image (custom or generated thumbnail)
+app.get('/book/:bookId/cover', async (req, res) => {
+  try {
+    const book = await Book.findById(req.params.bookId).select('coverImage coverImageType thumbnail thumbnailType visibility uploadedBy');
+    if (!book) {
+      return res.status(404).send('Book not found');
+    }
+
+    // If it's private, verify access
+    if (book.visibility === 'private') {
+      if (!req.user || book.uploadedBy.toString() !== req.user._id.toString()) {
+        return res.status(403).send('Access denied');
+      }
+    }
+
+    // Prefer custom cover image if available
+    if (book.coverImage && book.coverImageType) {
+      return res.set('Content-Type', book.coverImageType).send(book.coverImage);
+    }
+
+    // Fall back to generated thumbnail
+    if (book.thumbnail && book.thumbnailType) {
+      return res.set('Content-Type', book.thumbnailType).send(book.thumbnail);
+    }
+
+    // Return placeholder if no image available
+    res.status(204).end();
+  } catch (err) {
+    console.error('Cover fetch error:', err);
+    res.status(500).send('Failed to load cover');
+  }
+});
+
 app.get('/explore', isAuthenticated, async (req, res) => {
   try {
     const user = req.user;
@@ -1966,43 +2724,11 @@ app.post('/admin/news/post', isAuthenticated, isAdmin, newsImageUpload.single('i
     }
     const news = new News(newsData);
     await news.save();
-    const users = await User.find({ isAdmin: false }).select('email');
-    const emailList = users.map(user => user.email);
-    try {
-      for (const email of emailList) {
-        const mailOptions = {
-          from: `"BookHive Team" <${process.env.EMAIL_USER}>`,
-          to: email,
-          subject: `New Update from BookHive: ${sanitizedTitle}`,
-          html: `
-            <h2>New Update from BookHive</h2>
-            <h3>${sanitizedTitle}</h3>
-            <div>${sanitizedContent}</div>
-            ${req.file ? `<img src="cid:newsImage" style="max-width: 100%; height: auto;" alt="News Image" />` : ''}
-            <p>Visit <a href="https://bookhive-rsd.onrender.com/news">BookHive News</a> to read more.</p>
-            <p>Best regards,<br>BookHive Team</p>
-          `,
-          text: `New Update from BookHive\n\n${sanitizedTitle}\n\n${sanitizedContent.replace(/<[^>]*>?/gm, '')}\n\nVisit BookHive News to read more: https://bookhive-rsd.onrender.com/news\n\nBest regards,\nBookHive Team`,
-          headers: {
-            'X-Priority': '3',
-            'X-MSMail-Priority': 'Normal',
-            'Importance': 'Normal'
-          },
-          attachments: req.file ? [{
-            filename: req.file.originalname,
-            content: req.file.buffer,
-            contentType: req.file.mimetype,
-            cid: 'newsImage'
-          }] : []
-        };
-        await transporter.sendMail(mailOptions);
-        console.log(`Email notification sent successfully to: ${email}`);
-      }
-      console.log('All email notifications sent successfully');
-    } catch (emailErr) {
-      console.error('Error sending email notifications:', emailErr);
-    }
-    res.redirect('/admin?success=News posted successfully');
+    
+    // Send notifications to all users using the new notification system
+    await broadcastNewsNotification(news._id, sanitizedTitle, sanitizedContent);
+    
+    res.redirect('/admin?success=News posted successfully and notifications sent');
   } catch (err) {
     console.error('News post error:', err);
     res.redirect('/admin?error=Failed to post news');
@@ -2174,6 +2900,11 @@ app.post('/publication', isAuthenticated, (req, res, next) => {
     await publication.save();
     const populatedPublication = await Publication.findById(publication._id).populate('postedBy', 'username');
     io.emit('newPublication', populatedPublication);
+    
+    // Send notifications to all users using the new notification system (excluding the publisher)
+    const previewText = sanitizedContent.replace(/<[^>]*>?/gm, '').substring(0, 200);
+    await broadcastPublicationNotification(publication._id, user._id, user.username, previewText);
+    
     res.json({ success: true, message: 'Publication posted successfully' });
   } catch (err) {
     console.error('Publication post error:', err);
@@ -2209,7 +2940,7 @@ app.get('/publication-file/:pubId/:type/:index', isAuthenticated, async (req, re
     res.status(500).send('Failed to load file');
   }
 });
-// View publication document in PDF viewer
+// View publication document in universal viewer
 app.get('/view-pub-doc/:pubId/:index', isAuthenticated, async (req, res) => {
   try {
     const user = req.user;
@@ -2225,17 +2956,54 @@ app.get('/view-pub-doc/:pubId/:index', isAuthenticated, async (req, res) => {
     if (!doc) {
       return res.status(404).render('error', { message: 'Document not found', user: req.user, note: req.note ? req.note.content : '' });
     }
+    
+    // Determine file type from content type
+    let fileType = 'pdf';
+    if (doc.contentType === 'application/pdf') fileType = 'pdf';
+    else if (doc.contentType.startsWith('image/')) fileType = 'image';
+    else if (doc.contentType.includes('wordprocessingml') || doc.contentType.includes('word')) fileType = 'docx';
+    
     const tempBook = {
       _id: `${pub._id}-${index}`,
       title: doc.filename,
       fileName: doc.filename,
+      author: pub.postedBy ? 'Publication' : 'Unknown',
+      fileType: fileType,
       pubId: pub._id,
       docIndex: index
     };
-    res.render('pdf-viewer', { book: tempBook, user: req.user, note: req.note ? req.note.content : '', isPubDoc: true });
+    res.render('universal-viewer', { book: tempBook, user: req.user, note: req.note ? req.note.content : '', isPubDoc: true });
   } catch (err) {
     console.error('View publication document error:', err);
     res.status(500).render('error', { message: 'Failed to load document', user: req.user, note: req.note ? req.note.content : '' });
+  }
+});
+
+// Get publication document file
+app.get('/pub-file/:pubId/:index', isAuthenticated, async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.isAdmin) {
+      return res.status(403).send('Access denied');
+    }
+    const pub = await Publication.findById(req.params.pubId);
+    if (!pub) {
+      return res.status(404).send('Publication not found');
+    }
+    const index = parseInt(req.params.index);
+    const doc = pub.documents[index];
+    if (!doc) {
+      return res.status(404).send('Document not found');
+    }
+    res.set({
+      'Content-Type': doc.contentType,
+      'Content-Disposition': `inline; filename="${doc.filename}"`,
+      'Cache-Control': 'public, max-age=3600, immutable'
+    });
+    res.send(doc.data);
+  } catch (err) {
+    console.error('Publication file fetch error:', err);
+    res.status(500).send('Failed to load file');
   }
 });
 app.post('/publication/:id/like', isAuthenticated, async (req, res) => {
@@ -2310,7 +3078,7 @@ app.post('/validate-pdf', isAuthenticated, upload.single('file'), async (req, re
     }
     const fileType = getFileTypeFromMime(req.file.mimetype);
     if (!fileType) {
-      return res.status(400).json({ success: false, message: 'Only PDF files allowed' });
+      return res.status(400).json({ success: false, message: 'Only PDF, DOCX, and image files (JPG, PNG, GIF, WebP) are allowed' });
     }
     const isSafe = await validatePdfContent(req.file.buffer);
     if (!isSafe) {

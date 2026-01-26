@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= book.title %> - Viewer - BookHive</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/js/all.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #2d3748;
+        }
+        .viewer-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100%;
+            background-color: #1a202c;
+        }
+        .content-area {
+            flex-grow: 1;
+            overflow: auto;
+            background-color: #2d3748;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .pdf-canvas {
+            max-width: 100%;
+            height: auto;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .image-viewer {
+            max-width: 90%;
+            max-height: 90%;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .document-viewer {
+            width: 90%;
+            height: 90%;
+            border: 1px solid #4a5568;
+            border-radius: 8px;
+            background: white;
+        }
+        .toolbar {
+            background-color: #2d3748;
+            border-bottom: 1px solid #4a5568;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .toolbar-section {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        .btn {
+            background-color: #4299e1;
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #3182ce;
+        }
+        .btn:disabled {
+            background-color: #718096;
+            cursor: not-allowed;
+        }
+        .file-info {
+            color: #cbd5e0;
+            font-size: 0.875rem;
+        }
+        .page-nav {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .page-input {
+            width: 60px;
+            padding: 0.25rem 0.5rem;
+            border: 1px solid #4a5568;
+            border-radius: 4px;
+            background-color: #1a202c;
+            color: #e2e8f0;
+        }
+        .scrollbar-container::-webkit-scrollbar {
+            width: 10px;
+        }
+        .scrollbar-container::-webkit-scrollbar-track {
+            background: #2d3748;
+        }
+        .scrollbar-container::-webkit-scrollbar-thumb {
+            background-color: #4a5568;
+            border-radius: 5px;
+        }
+        .scrollbar-container::-webkit-scrollbar-thumb:hover {
+            background-color: #718096;
+        }
+        .presentation-slide {
+            width: 100%;
+            height: 100%;
+            background: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            color: #2d3748;
+        }
+        .docx-content {
+            padding: 2rem;
+            line-height: 1.6;
+            color: #1a202c;
+            font-size: 1rem;
+            overflow-y: auto;
+            max-height: 90vh;
+        }
+    </style>
+</head>
+<body>
+    <div class="viewer-container">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-section">
+                <a href="/bookhive" class="btn" style="background-color: #48bb78;">
+                    <i class="fas fa-arrow-left"></i> Back to Library
+                </a>
+                <div class="file-info">
+                    <strong><%= book.title %></strong> by <%= book.author %>
+                </div>
+            </div>
+
+            <% if (book.fileType && (book.fileType === 'pdf' || book.fileType === 'pptx')) { %>
+                <div class="toolbar-section page-nav">
+                    <button class="btn" id="prevBtn" onclick="previousPage()">
+                        <i class="fas fa-chevron-left"></i> Prev
+                    </button>
+                    <input type="number" class="page-input" id="pageInput" value="1" min="1" onchange="goToPage(this.value)">
+                    <span class="file-info">/ <span id="totalPages">1</span></span>
+                    <button class="btn" id="nextBtn" onclick="nextPage()">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            <% } %>
+
+            <div class="toolbar-section">
+                <button class="btn" id="downloadBtn" onclick="downloadFile()">
+                    <i class="fas fa-download"></i> Download
+                </button>
+                <a href="/" class="btn" style="background-color: #ed8936; text-decoration: none;">
+                    <i class="fas fa-home"></i> Home
+                </a>
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content-area scrollbar-container" id="contentArea">
+            <!-- PDF Viewer -->
+            <% if (book.fileType === 'pdf') { %>
+                <canvas id="pdfCanvas" class="pdf-canvas"></canvas>
+            <% } %>
+
+            <!-- Image Viewer -->
+            <% if (book.fileType === 'image') { %>
+                <img id="imageViewer" class="image-viewer" src="/file/<%= book._id %>" alt="<%= book.title %>">
+            <% } %>
+
+            <!-- DOCX Viewer -->
+            <% if (book.fileType === 'docx') { %>
+                <div class="document-viewer">
+                    <div id="docxContent" class="docx-content"></div>
+                </div>
+            <% } %>
+
+            <!-- PPTX Viewer (Presentation Mode) -->
+            <% if (book.fileType === 'pptx') { %>
+                <div class="presentation-slide" id="pptxSlide">
+                    Loading presentation...
+                </div>
+            <% } %>
+        </div>
+    </div>
+
+    <script>
+        const fileType = '<%= book.fileType %>';
+        const bookId = '<%= book._id %>';
+        const isPubDoc = <%= isPubDoc %>;
+
+        // ===== PDF VIEWER =====
+        <% if (book.fileType === 'pdf') { %>
+            pdfjsLib.getDocument('/file/<%= book._id %>').promise.then(pdf => {
+                window.pdfDoc = pdf;
+                document.getElementById('totalPages').textContent = pdf.numPages;
+                document.getElementById('pageInput').max = pdf.numPages;
+                renderPage(1);
+            }).catch(err => {
+                document.getElementById('contentArea').innerHTML = '<p style="color: #e2e8f0;">Error loading PDF: ' + err.message + '</p>';
+            });
+
+            function renderPage(pageNum) {
+                window.pdfDoc.getPage(pageNum).then(page => {
+                    const canvas = document.getElementById('pdfCanvas');
+                    const context = canvas.getContext('2d');
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    page.render({ canvasContext: context, viewport: viewport });
+                });
+            }
+
+            function nextPage() {
+                const currentPage = parseInt(document.getElementById('pageInput').value);
+                if (currentPage < window.pdfDoc.numPages) {
+                    const nextPage = currentPage + 1;
+                    document.getElementById('pageInput').value = nextPage;
+                    renderPage(nextPage);
+                }
+            }
+
+            function previousPage() {
+                const currentPage = parseInt(document.getElementById('pageInput').value);
+                if (currentPage > 1) {
+                    const prevPage = currentPage - 1;
+                    document.getElementById('pageInput').value = prevPage;
+                    renderPage(prevPage);
+                }
+            }
+
+            function goToPage(pageNum) {
+                const num = parseInt(pageNum);
+                if (num > 0 && num <= window.pdfDoc.numPages) {
+                    renderPage(num);
+                }
+            }
+        <% } %>
+
+        // ===== PPTX VIEWER =====
+        <% if (book.fileType === 'pptx') { %>
+            // Simple PPTX viewer - Shows slide count and navigation
+            let currentSlide = 1;
+            let totalSlides = 1;
+
+            // For now, show a placeholder
+            document.getElementById('pptxSlide').innerHTML = `
+                <div style="text-align: center;">
+                    <i class="fas fa-file-powerpoint" style="font-size: 3rem; color: #ed8936; margin-bottom: 1rem;"></i>
+                    <p>PowerPoint Presentation Viewer</p>
+                    <p style="font-size: 0.875rem; color: #718096; margin-top: 1rem;">
+                        This presentation has been uploaded. Use the page navigation to view slides.
+                    </p>
+                </div>
+            `;
+
+            function nextPage() {
+                // Navigation logic for PPTX
+                console.log('Next slide:', currentSlide + 1);
+            }
+
+            function previousPage() {
+                // Navigation logic for PPTX
+                console.log('Previous slide:', currentSlide - 1);
+            }
+
+            function goToPage(pageNum) {
+                currentSlide = parseInt(pageNum);
+                console.log('Go to slide:', currentSlide);
+            }
+        <% } %>
+
+        // ===== DOCX VIEWER =====
+        <% if (book.fileType === 'docx') { %>
+            // Fetch and display DOCX content
+            fetch('/file/<%= book._id %>')
+                .then(response => response.arrayBuffer())
+                .then(buffer => {
+                    // For now, show a message that it's loaded
+                    document.getElementById('docxContent').innerHTML = `
+                        <div style="padding: 2rem; background: #f7fafc; border-radius: 8px;">
+                            <i class="fas fa-file-word" style="font-size: 2rem; color: #2563eb; margin-bottom: 1rem;"></i>
+                            <p style="font-size: 1.125rem; font-weight: 600; color: #1a202c;">Word Document</p>
+                            <p style="color: #4a5568; margin-top: 0.5rem;">
+                                This Word document has been successfully uploaded to BookHive.
+                            </p>
+                            <p style="color: #718096; font-size: 0.875rem; margin-top: 1rem;">
+                                Document size: ${(buffer.byteLength / 1024).toFixed(2)} KB
+                            </p>
+                        </div>
+                    `;
+                })
+                .catch(err => {
+                    document.getElementById('docxContent').innerHTML = '<p style="color: #e53e3e;">Error loading document: ' + err.message + '</p>';
+                });
+        <% } %>
+
+        // ===== DOWNLOAD FUNCTION =====
+        function downloadFile() {
+            const link = document.createElement('a');
+            link.href = '/file/<%= book._id %>';
+            link.download = '<%= book.fileName %>';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

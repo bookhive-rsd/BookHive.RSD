@@ -533,7 +533,7 @@
         <a href="/publications" class="nav-link"><i class="fas fa-book-open"></i> Publications</a>
         <a href="/bookhive" class="nav-link active"><i class="fas fa-book"></i> BookHive</a>
         <a href="/community" class="nav-link"><i class="fas fa-comments"></i> Community</a>
-        <!-- <a href="/account" class="nav-link"><i class="fas fa-user"></i> Account</a> -->
+        <a href="/notifications" class="nav-link"><i class="fas fa-bell"></i> Notifications</a>
         <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
       </nav>
     </div>
@@ -680,6 +680,9 @@
                 </span>
                 <div class="book-actions">
                   <a href="/view/<%= book._id %>" class="btn btn-primary">Read</a>
+                  <button class="btn btn-secondary upload-cover" data-book-id="<%= book._id %>" title="Upload custom book cover">
+                    <i class="fas fa-image"></i> Cover
+                  </button>
                   <!-- <button class="btn btn-secondary manage-sharing" data-book-id="<%= book._id %>" data-visibility="<%= book.visibility %>">Share</button> -->
                   <button class="btn btn-danger delete-book" data-book-id="<%= book._id %>">Delete</button>
                   <!-- <div class="dropdown">
@@ -739,8 +742,8 @@
         </div>
         <div class="form-group file-input">
           <label for="file">File</label>
-          <input type="file" id="file" name="file" accept="application/pdf" required>
-          <p class="file-help">Only PDF files are supported (max 500MB)</p>
+          <input type="file" id="file" name="file" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,.gif,.webp" required>
+          <p class="file-help">Supported formats: PDF, DOCX, and images (JPG, PNG, GIF, WebP) - max 500MB</p>
           <p id="validationMessage" class="validation-message">Please select a file to validate.</p>
         </div>
         <div class="form-group">
@@ -771,6 +774,27 @@
           <div class="access-list" id="accessList"></div>
         </div>
         <button id="saveVisibility" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+
+    <!-- Cover Image Upload Modal -->
+    <div id="coverModal" class="modal">
+      <div class="modal-content" style="max-width: 500px;">
+        <span class="close">×</span>
+        <h3>Upload Book Cover</h3>
+        <p id="coverBookTitle" style="color: #666; margin-bottom: 20px;"></p>
+        <div class="form-group file-input">
+          <label for="coverImageInput">Cover Image</label>
+          <input type="file" id="coverImageInput" accept="image/jpeg,image/png,image/gif,image/webp">
+          <p class="file-help">Recommended size: 300x450px. Formats: JPG, PNG, GIF, WebP - max 5MB</p>
+        </div>
+        <div id="coverPreview" style="margin: 20px 0; text-align: center; display: none;">
+          <img id="previewImage" src="" alt="Preview" style="max-width: 200px; max-height: 300px; border-radius: 8px;">
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button id="uploadCoverBtn" class="btn btn-primary" style="flex: 1;">Upload Cover</button>
+          <button id="removeCoverBtn" class="btn btn-secondary" style="flex: 1;">Remove Cover</button>
+        </div>
       </div>
     </div>
   </main>
@@ -1464,6 +1488,133 @@
             accessList.innerHTML = '<p>Failed to load access list.</p>';
           }
         }
+
+        // Cover image upload functionality
+        const coverModal = document.getElementById('coverModal');
+        const coverImageInput = document.getElementById('coverImageInput');
+        const previewImage = document.getElementById('previewImage');
+        const coverPreview = document.getElementById('coverPreview');
+        const uploadCoverBtn = document.getElementById('uploadCoverBtn');
+        const removeCoverBtn = document.getElementById('removeCoverBtn');
+        const coverBookTitle = document.getElementById('coverBookTitle');
+        let currentCoverBookId = null;
+
+        const uploadCoverButtons = document.querySelectorAll('.upload-cover');
+        uploadCoverButtons.forEach(button => {
+          button.addEventListener('click', (e) => {
+            e.preventDefault();
+            const bookCard = e.target.closest('.book-card');
+            const bookId = button.dataset.bookId;
+            const bookTitle = bookCard.querySelector('h3').textContent;
+            
+            currentCoverBookId = bookId;
+            coverBookTitle.textContent = bookTitle;
+            coverImageInput.value = '';
+            coverPreview.style.display = 'none';
+            coverModal.style.display = 'block';
+          });
+        });
+
+        // Close cover modal listeners
+        const coverCloseBtn = coverModal.querySelector('.close');
+        if (coverCloseBtn) {
+          coverCloseBtn.addEventListener('click', () => {
+            coverModal.style.display = 'none';
+          });
+        }
+
+        window.addEventListener('click', (e) => {
+          if (e.target === coverModal) {
+            coverModal.style.display = 'none';
+          }
+        });
+
+        // Preview image when selected
+        coverImageInput.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              previewImage.src = event.target.result;
+              coverPreview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+          }
+        });
+
+        // Upload cover image
+        uploadCoverBtn.addEventListener('click', async () => {
+          if (!coverImageInput.files[0]) {
+            alert('Please select an image first');
+            return;
+          }
+
+          const formData = new FormData();
+          formData.append('coverImage', coverImageInput.files[0]);
+
+          uploadCoverBtn.disabled = true;
+          uploadCoverBtn.textContent = 'Uploading...';
+
+          try {
+            const response = await fetch(`/book/${currentCoverBookId}/upload-cover`, {
+              method: 'POST',
+              body: formData
+            });
+            const data = await response.json();
+            if (data.success) {
+              // Update thumbnail in the book card
+              const bookCard = document.querySelector(`.book-card[data-id="${currentCoverBookId}"]`);
+              const thumbnail = bookCard.querySelector('.thumbnail');
+              // Force refresh by adding a timestamp
+              thumbnail.src = `/thumbnail/${currentCoverBookId}?t=${Date.now()}`;
+              
+              alert('Cover image uploaded successfully');
+              coverModal.style.display = 'none';
+            } else {
+              alert(data.message || 'Failed to upload cover');
+            }
+          } catch (err) {
+            console.error('Cover upload error:', err);
+            alert('Error uploading cover');
+          } finally {
+            uploadCoverBtn.disabled = false;
+            uploadCoverBtn.textContent = 'Upload Cover';
+          }
+        });
+
+        // Remove cover image
+        removeCoverBtn.addEventListener('click', async () => {
+          if (!confirm('Are you sure you want to remove the custom cover?')) {
+            return;
+          }
+
+          removeCoverBtn.disabled = true;
+          removeCoverBtn.textContent = 'Removing...';
+
+          try {
+            const response = await fetch(`/book/${currentCoverBookId}/cover`, {
+              method: 'DELETE'
+            });
+            const data = await response.json();
+            if (data.success) {
+              // Update thumbnail to show default
+              const bookCard = document.querySelector(`.book-card[data-id="${currentCoverBookId}"]`);
+              const thumbnail = bookCard.querySelector('.thumbnail');
+              thumbnail.src = `/thumbnail/${currentCoverBookId}?t=${Date.now()}`;
+              
+              alert('Cover image removed');
+              coverModal.style.display = 'none';
+            } else {
+              alert(data.message || 'Failed to remove cover');
+            }
+          } catch (err) {
+            console.error('Cover removal error:', err);
+            alert('Error removing cover');
+          } finally {
+            removeCoverBtn.disabled = false;
+            removeCoverBtn.textContent = 'Remove Cover';
+          }
+        });
       }
 
       // Upload tab functionalities
@@ -1517,16 +1668,32 @@
           isFileValid = false;
           fileInput.value = '';
           return;
-        } else if (file.type !== 'application/pdf') {
-          fileHelp.textContent = 'Error: Only PDF files are allowed';
-          fileHelp.style.color = 'red';
-          validationMessage.textContent = '';
-          validationMessage.className = 'validation-message';
-          submitButton.classList.add('btn-disabled');
-          submitButton.disabled = true;
-          isFileValid = false;
-          fileInput.value = '';
-          return;
+        } else {
+          const allowedTypes = [
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-word.document.macroEnabled.12',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'application/vnd.ms-powerpoint.presentation.macroEnabled.12',
+            'application/vnd.ms-powerpoint',
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp'
+          ];
+          
+          if (!allowedTypes.includes(file.type)) {
+            fileHelp.textContent = 'Error: Only PDF, DOCX, PPTX, and image files (JPG, PNG, GIF, WebP) are allowed';
+            fileHelp.style.color = 'red';
+            validationMessage.textContent = '';
+            validationMessage.className = 'validation-message';
+            submitButton.classList.add('btn-disabled');
+            submitButton.disabled = true;
+            isFileValid = false;
+            fileInput.value = '';
+            return;
+          }
         }
 
         fileHelp.textContent = originalHelpText;
