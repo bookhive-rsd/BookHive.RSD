@@ -812,6 +812,112 @@
       border-radius: 4px;
       margin-right: 0.5rem;
     }
+
+    /* Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      animation: fadeIn 0.3s ease;
+    }
+
+    .modal-content {
+      background-color: #fefefe;
+      margin: 5% auto;
+      padding: 2rem;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 600px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .modal-close:hover {
+      color: #000;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+      display: block;
+      font-weight: 600;
+      color: #0f172a;
+      margin-bottom: 0.5rem;
+    }
+
+    .form-input,
+    .form-textarea,
+    .form-select {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px;
+    }
+
+    .form-input:focus,
+    .form-textarea:focus,
+    .form-select:focus {
+      outline: none;
+      border-color: #0a66c2;
+      box-shadow: 0 0 0 3px rgba(10, 102, 194, 0.1);
+    }
+
+    .form-textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .search-bar {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .search-input {
+      flex: 1;
+      padding: 0.75rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .filter-select {
+      padding: 0.75rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: white;
+      cursor: pointer;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #0a66c2;
+      color: white;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
   </style>
 
 </head>
@@ -838,233 +944,147 @@
   </header>
 
   <!-- Main Content -->
-  <main class="container">
-    <h2>Community Hub</h2>
-
-    <!-- Community Stats -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <p class="stat-value"><%= activeUsers %></p>
-        <p class="stat-label">Active Now</p>
-      </div>
-      <div class="stat-card">
-        <p class="stat-value"><%= messages.length %></p>
-        <p class="stat-label">Messages</p>
-      </div>
-      <div class="stat-card">
-        <p class="stat-value"><%= totalUsers %></p>
-        <p class="stat-label">Total Members</p>
-      </div>
-      <div class="stat-card">
-        <p class="stat-value">+<%= Math.floor(Math.random() * 100) %></p>
-        <p class="stat-label">Points (You)</p>
-      </div>
-    </div>
-
-    <!-- Tab Navigation -->
-    <div class="community-tabs">
-      <button class="tab-btn active" data-tab="chat">
-        <i class="fas fa-comments"></i> Chat
-      </button>
-      <button class="tab-btn" data-tab="discussions">
-        <i class="fas fa-comments-dollar"></i> Discussions
-      </button>
-      <button class="tab-btn" data-tab="events">
-        <i class="fas fa-calendar"></i> Events
-      </button>
-      <button class="tab-btn" data-tab="groups">
-        <i class="fas fa-users"></i> Groups
-      </button>
-      <button class="tab-btn" data-tab="activity">
-        <i class="fas fa-fire"></i> Activity
-      </button>
-      <button class="tab-btn" data-tab="members">
-        <i class="fas fa-crown"></i> Members
-      </button>
-    </div>
-
-    <!-- TAB 1: Chat -->
-    <div class="tab-content active" id="chat-tab">
-      <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #e2e8f0;">
-          <h3 style="display: flex; align-items: center; gap: 12px; margin: 0; font-size: 20px; font-weight: 700; color: #0f172a;">
-            <i class="fas fa-comments" style="color: #0a66c2; font-size: 22px;"></i>
-            Community Chat
-          </h3>
-          <span style="display: flex; align-items: center; gap: 10px; color: #0a66c2; font-size: 14px; font-weight: 600; background: #dbeafe; padding: 0.5rem 1rem; border-radius: 20px;">
-            <i class="fas fa-circle" style="color: #22c55e; font-size: 8px;"></i>
-            <span id="activeUsers"><%= activeUsers %></span> Active
-          </span>
-        </div>
+  <main style="display: flex; flex: 1; height: calc(100vh - 130px); overflow: hidden; max-width: 1400px; margin: 0 auto; width: 100%;">
+    <!-- Sidebar Navigation -->
+    <div style="width: 160px; background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); border-right: 1px solid #334155; display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0;">
+      <div style="padding: 1.5rem 1rem;">
+        <h3 style="color: white; margin: 0 0 1.5rem; font-size: 16px;">Community</h3>
         
-        <!-- Typing Indicator -->
-        <div id="typingIndicator" class="typing-indicator">
-          <div class="typing-dots">
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-          </div>
-          <span style="font-size: 0.9rem; font-weight: 500; color: #666;">
-            <span id="typingUser"></span> is typing...
-          </span>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <button class="sidebar-btn active" data-section="chat" style="background: linear-gradient(135deg, #0a66c2, #2563eb); color: white; border: none; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer; text-align: left; font-weight: 600; display: flex; align-items: center; gap: 10px; font-size: 13px; transition: all 0.2s;">
+            <i class="fas fa-comments"></i> Chat
+          </button>
+          
+          <button class="sidebar-btn" data-section="qa" style="background: transparent; color: #cbd5e0; border: none; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer; text-align: left; font-weight: 600; display: flex; align-items: center; gap: 10px; font-size: 13px; transition: all 0.2s;">
+            <i class="fas fa-lightbulb"></i> Q&A
+          </button>
+          
+          <button class="sidebar-btn" data-section="events" style="background: transparent; color: #cbd5e0; border: none; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer; text-align: left; font-weight: 600; display: flex; align-items: center; gap: 10px; font-size: 13px; transition: all 0.2s;">
+            <i class="fas fa-video"></i> Meetings
+          </button>
+          
+          <button class="sidebar-btn" data-section="groups" style="background: transparent; color: #cbd5e0; border: none; padding: 0.75rem 1rem; border-radius: 8px; cursor: pointer; text-align: left; font-weight: 600; display: flex; align-items: center; gap: 10px; font-size: 13px; transition: all 0.2s;">
+            <i class="fas fa-users"></i> Groups
+          </button>
         </div>
-
-        <!-- Messages Container -->
-        <div id="publicChatMessages">
-        <% messages.forEach((message) => { %>
-          <div class="message-group <%= message.isChatbotResponse ? 'chatbot-message' : (message.user._id === user._id ? 'current-user' : 'other-user') %>" data-message-id="<%= message._id %>">
-            <div class="message-header">
-              <% if (!message.isChatbotResponse && message.user._id !== user._id) { %>
-                <div class="user-avatar"><%= message.user.username.charAt(0).toUpperCase() %></div>
-              <% } %>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="username-badge"><%= message.user.username %></span>
-                <% if (message.isChatbotResponse) { %>
-                  <span class="chatbot-badge">AI</span>
-                <% } %>
-              </div>
-              <% if (message.isChatbotResponse) { %>
-                <div class="user-avatar"><i class="fas fa-robot" style="font-size: 16px;"></i></div>
-              <% } else if (message.user._id === user._id) { %>
-                <div class="user-avatar"><%= message.user.username.charAt(0).toUpperCase() %></div>
-              <% } %>
-            </div>
-            <div class="community-chat-message">
-              <p class="message-content"><%= message.content %></p>
-            </div>
-            <div class="message-footer">
-              <span class="message-timestamp"><%= new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) %></span>
-            </div>
-          </div>
-        <% }) %>
       </div>
 
-      <!-- Message Input -->
-      <div style="border-top: 2px solid #e2e8f0; padding-top: 1.25rem; margin-top: 1rem;">
-        <form id="publicChatForm" style="display: flex; gap: 0.75rem; margin-bottom: 0.75rem;">
-          <input 
-            type="text" 
-            id="publicMessageInput" 
-            placeholder="Type a message... (mention @chatbot for AI help)"
-            autocomplete="off"
-            style="flex: 1; padding: 0.75rem 1rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; font-family: 'Poppins', sans-serif; transition: all 0.2s; background-color: #f8fafc;">
-          <button type="submit" style="background: linear-gradient(135deg, #0a66c2, #2563eb); color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; transition: all 0.2s; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(10, 102, 194, 0.2);">
-            <i class="fas fa-paper-plane"></i> Send
-          </button>
-        </form>
-        <p style="font-size: 12px; color: #64748b; margin: 0; padding: 0.5rem 0;">
-          <i class="fas fa-lightbulb" style="color: #0a66c2; margin-right: 4px;"></i> Tip: Type <strong>@chatbot</strong> to ask AI questions
-        </p>
+      <div style="padding: 1rem; margin-top: auto; border-top: 1px solid #475569;">
+        <div style="color: #94a3b8; font-size: 12px; margin-bottom: 0.75rem;">
+          <p style="margin: 0.25rem 0;"><i class="fas fa-circle" style="color: #22c55e; font-size: 8px; margin-right: 6px;"></i><span id="activeUsers" style="font-weight: 600;"><%= activeUsers %></span> Active</p>
+          <p style="margin: 0.25rem 0;"><i class="fas fa-comment" style="margin-right: 6px;"></i><span id="msgCount" style="font-weight: 600;"><%= messages.filter(m => !m.isDiscussion && !m.isEvent && !m.isGroup && !m.isResponse).length %></span> Messages</p>
+        </div>
       </div>
     </div>
 
-    <!-- TAB 2: Discussions -->
-    <div class="tab-content" id="discussions-tab">
-      <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-          <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #0f172a;">
-            <i class="fas fa-lightbulb"></i> Discussion Threads
-          </h3>
-          <button class="btn-primary" onclick="openModal('discussionModal')">
-            <i class="fas fa-plus"></i> Start Discussion
+    <!-- Main Content Area -->
+    <div style="flex: 1; display: flex; flex-direction: column; background: #f9fafb; overflow: hidden;">
+      <!-- Header Bar -->
+      <div style="background: white; border-bottom: 1px solid #e5e7eb; padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h2 id="sectionTitle" style="margin: 0; font-size: 20px; font-weight: 700; color: #0f172a;">Community Chat</h2>
+          <p id="sectionDesc" style="margin: 0.25rem 0 0; font-size: 13px; color: #6b7280;">Connect and communicate with your community</p>
+        </div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <button class="quick-action" onclick="openModal('discussionModal')" id="btn-qa" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;">
+            <i class="fas fa-plus"></i> Ask Question
           </button>
-        </div>
-        
-        <!-- Search & Filter -->
-        <div class="search-bar">
-          <input type="text" class="search-input" id="discussionSearch" placeholder="Search discussions...">
-          <select class="filter-select" id="categoryFilter">
-            <option value="all">All Categories</option>
-            <option value="question">Questions</option>
-            <option value="announcement">Announcements</option>
-            <option value="resource">Resources</option>
-            <option value="event">Events</option>
-          </select>
-        </div>
-
-        <div id="discussionsList"></div>
-      </div>
-    </div>
-
-    <!-- TAB 3: Events -->
-    <div class="tab-content" id="events-tab">
-      <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-          <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #0f172a;">
-            <i class="fas fa-calendar-alt"></i> Upcoming Events
-          </h3>
-          <button class="btn-primary" onclick="openModal('eventModal')">
-            <i class="fas fa-plus"></i> Create Event
+          <button class="quick-action" onclick="openModal('eventModal')" id="btn-event" style="display: none; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;">
+            <i class="fas fa-plus"></i> Share Meeting
           </button>
-        </div>
-        <div id="eventsList"></div>
-      </div>
-    </div>
-
-    <!-- TAB 4: Groups -->
-    <div class="tab-content" id="groups-tab">
-      <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-          <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #0f172a;">
-            <i class="fas fa-users-cog"></i> Community Groups
-          </h3>
-          <button class="btn-primary" onclick="openModal('groupModal')">
+          <button class="quick-action" onclick="openModal('groupModal')" id="btn-group" style="display: none; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;">
             <i class="fas fa-plus"></i> Create Group
           </button>
         </div>
-        <div id="groupsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;"></div>
       </div>
-    </div>
 
-    <!-- TAB 5: Activity Feed -->
-    <div class="tab-content" id="activity-tab">
-      <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
-        <h3 style="margin: 0 0 1.5rem; font-size: 18px; font-weight: 700; color: #0f172a;">
-          <i class="fas fa-fire" style="color: #f59e0b;"></i> Recent Activity
-        </h3>
-        <div id="activityFeed"></div>
-      </div>
-    </div>
+      <!-- Content Area -->
+      <div style="flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column;">
+        <!-- Chat Section -->
+        <div id="chat-section" class="content-section" style="display: flex; flex-direction: column;">
+          <div id="publicChatMessages" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+        <% messages.forEach((message) => { %>
+          <% if (!message.isDiscussion && !message.isEvent && !message.isGroup && !message.isResponse) { %>
+            <div class="message-group <%= message.isChatbotResponse ? 'chatbot-message' : (message.user._id === user._id ? 'current-user' : 'other-user') %>" data-message-id="<%= message._id %>" style="background: white; padding: 1rem; border-radius: 8px; border-left: 3px solid <%= message.isChatbotResponse ? '#0a66c2' : '#e5e7eb' %>;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 0.5rem;">
+                <span style="background: <%= message.isChatbotResponse ? '#0a66c2' : '#e5e7eb' %>; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: <%= message.isChatbotResponse ? 'white' : '#333' %>; font-weight: 600; font-size: 12px;">
+                  <% if (message.isChatbotResponse) { %>
+                    <i class="fas fa-robot"></i>
+                  <% } else { %>
+                    <%= message.user.username.charAt(0).toUpperCase() %>
+                  <% } %>
+                </span>
+                <div>
+                  <span style="font-weight: 600; font-size: 13px; color: #0f172a;"><%= message.user.username %></span>
+                  <% if (message.isChatbotResponse) { %>
+                    <span style="background: #dbeafe; color: #0a66c2; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">AI</span>
+                  <% } %>
+                </div>
+                <span style="margin-left: auto; font-size: 11px; color: #999;"><%= new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) %></span>
+              </div>
+              <p class="message-content" style="margin: 0; color: #374151; line-height: 1.4; word-wrap: break-word;"><%= message.content %></p>
+            </div>
+          <% } %>
+        <% }) %>
+          </div>
 
-    <!-- TAB 6: Top Members -->
-    <div class="tab-content" id="members-tab">
-      <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
-        <h3 style="margin: 0 0 1.5rem; font-size: 18px; font-weight: 700; color: #0f172a;">
-          <i class="fas fa-crown" style="color: #f59e0b;"></i> Top Contributors
-        </h3>
-        <div id="membersList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;"></div>
+          <!-- Typing Indicator -->
+          <div id="typingIndicator" style="display: none; padding: 0.75rem; background: #f3f4f6; border-radius: 8px; font-size: 12px; color: #666;">
+            <span id="typingUser"></span> is typing...
+          </div>
+
+          <!-- Chat Input -->
+          <form id="publicChatForm" style="display: flex; gap: 0.5rem; margin-top: auto; border-top: 1px solid #e5e7eb; padding-top: 1rem; width: 100%; min-width: 0;">
+            <input 
+              type="text" 
+              id="publicMessageInput" 
+              placeholder="Type a message... @chatbot for AI"
+              autocomplete="off"
+              style="flex: 1; min-width: 0; padding: 0.75rem 1rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; font-family: 'Poppins', sans-serif;">
+            <button type="submit" style="background: linear-gradient(135deg, #0a66c2, #2563eb); color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px; flex-shrink: 0;">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </form>
+        </div>
+
+        <!-- Q&A Section -->
+        <div id="qa-section" class="content-section" style="display: none; flex-direction: column;">
+          <button class="quick-action" onclick="openModal('discussionModal')" style="align-self: flex-start; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; margin-bottom: 1rem;">
+            <i class="fas fa-plus"></i> Ask Question
+          </button>
+          <div id="discussionsList" style="flex: 1; overflow-y: auto;"></div>
+        </div>
+
+        <!-- Events Section -->
+        <div id="events-section" class="content-section" style="display: none; flex-direction: column;">
+          <button class="quick-action" onclick="openModal('eventModal')" style="align-self: flex-start; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; margin-bottom: 1rem;">
+            <i class="fas fa-plus"></i> Share Meeting
+          </button>
+          <div id="eventsList" style="flex: 1; overflow-y: auto;"></div>
+        </div>
+
+        <!-- Groups Section -->
+        <div id="groups-section" class="content-section" style="display: none; flex-direction: column;">
+          <button class="quick-action" onclick="openModal('groupModal')" style="align-self: flex-start; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; margin-bottom: 1rem;">
+            <i class="fas fa-plus"></i> Create Group
+          </button>
+          <div id="groupsList" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;"></div>
+        </div>
       </div>
     </div>
+  </main>
 
     <!-- Modals -->
     <div class="modal" id="discussionModal">
       <div class="modal-content">
         <button class="modal-close" onclick="closeModal('discussionModal')">&times;</button>
-        <h2 style="margin-top: 0;">Start a Discussion</h2>
+        <h2 style="margin-top: 0; font-size: 20px;">Ask a Question</h2>
         <form id="discussionForm">
           <div class="form-group">
-            <label class="form-label">Title</label>
-            <input type="text" class="form-input" id="discussionTitle" required>
+            <label class="form-label">Your Question</label>
+            <textarea class="form-textarea" id="discussionContent" placeholder="Ask your question..." required style="min-height: 100px;"></textarea>
           </div>
-          <div class="form-group">
-            <label class="form-label">Description</label>
-            <textarea class="form-textarea" id="discussionContent" required></textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Category</label>
-            <select class="form-select" id="discussionCategory">
-              <option value="general">General</option>
-              <option value="question">Question</option>
-              <option value="announcement">Announcement</option>
-              <option value="resource">Resource</option>
-              <option value="event">Event</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Tags (comma-separated)</label>
-            <input type="text" class="form-input" id="discussionTags" placeholder="e.g., python, web-dev">
-          </div>
-          <button type="submit" class="btn-primary" style="width: 100%;">Create Discussion</button>
+          <button type="submit" class="btn-primary" style="width: 100%;">Post Question</button>
         </form>
       </div>
     </div>
@@ -1072,35 +1092,17 @@
     <div class="modal" id="eventModal">
       <div class="modal-content">
         <button class="modal-close" onclick="closeModal('eventModal')">&times;</button>
-        <h2 style="margin-top: 0;">Create an Event</h2>
+        <h2 style="margin-top: 0;">Share Meeting</h2>
         <form id="eventForm">
           <div class="form-group">
-            <label class="form-label">Event Title</label>
-            <input type="text" class="form-input" id="eventTitle" required>
+            <label class="form-label">Meeting Title</label>
+            <input type="text" class="form-input" id="eventTitle" placeholder="e.g., Team Sync Meeting" required>
           </div>
           <div class="form-group">
-            <label class="form-label">Description</label>
-            <textarea class="form-textarea" id="eventDescription"></textarea>
+            <label class="form-label">Meeting Link/URL</label>
+            <input type="url" class="form-input" id="eventDescription" placeholder="https://zoom.us/..." required>
           </div>
-          <div class="form-group">
-            <label class="form-label">Start Date & Time</label>
-            <input type="datetime-local" class="form-input" id="eventStart" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">End Date & Time</label>
-            <input type="datetime-local" class="form-input" id="eventEnd" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Event Type</label>
-            <select class="form-select" id="eventType">
-              <option value="meetup">Meetup</option>
-              <option value="webinar">Webinar</option>
-              <option value="workshop">Workshop</option>
-              <option value="discussion">Discussion</option>
-              <option value="social">Social</option>
-            </select>
-          </div>
-          <button type="submit" class="btn-primary" style="width: 100%;">Create Event</button>
+          <button type="submit" class="btn-primary" style="width: 100%;">Share Meeting</button>
         </form>
       </div>
     </div>
@@ -1160,14 +1162,20 @@
       const publicChatMessages = document.getElementById('publicChatMessages');
       publicChatMessages.innerHTML = '';
       data.messages.forEach(message => {
-        appendPublicMessage(message);
+        // Only display public chat messages
+        if (!message.isDiscussion && !message.isEvent && !message.isGroup && !message.isResponse && !message.isGroupMessage) {
+          appendPublicMessage(message);
+        }
       });
       scrollToBottom('publicChatMessages');
     });
 
     socket.on('chatMessage', (message) => {
-      appendPublicMessage(message);
-      scrollToBottom('publicChatMessages');
+      // Only display public chat messages
+      if (!message.isDiscussion && !message.isEvent && !message.isGroup && !message.isResponse && !message.isGroupMessage) {
+        appendPublicMessage(message);
+        scrollToBottom('publicChatMessages');
+      }
     });
 
     // Typing indicator
@@ -1181,6 +1189,11 @@
 
     // Helper functions
     function appendPublicMessage(message) {
+      // Filter out non-chat messages
+      if (message.isDiscussion || message.isEvent || message.isGroup || message.isResponse || message.isGroupMessage) {
+        return;
+      }
+      
       const publicChatMessages = document.getElementById('publicChatMessages');
       const messageGroup = document.createElement('div');
       
@@ -1259,17 +1272,42 @@
     function showNotification(message, type = 'info') {
       const notification = document.createElement('div');
       const colors = {
-        success: 'bg-green-500',
-        error: 'bg-red-500',
-        warning: 'bg-yellow-500',
-        info: 'bg-blue-500'
+        success: '#22c55e',
+        error: '#ef4444',
+        warning: '#f59e0b',
+        info: '#3b82f6'
       };
       
-      notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2`;
+      const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+      };
+      
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background-color: ${colors[type]};
+        color: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        max-width: 90vw;
+        font-size: 14px;
+        font-weight: 500;
+        animation: slideIn 0.3s ease;
+      `;
+      
       notification.innerHTML = `
-        <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'exclamation-triangle' : type === 'warning' ? 'exclamation' : 'info'}-circle"></i>
+        <i class="fas ${icons[type]}" style="font-size: 18px;"></i>
         <span>${message}</span>
-        <button onclick="this.parentElement.remove()" class="ml-2 text-white hover:text-gray-200">
+        <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; cursor: pointer; font-size: 16px; margin-left: auto;">
           <i class="fas fa-times"></i>
         </button>
       `;
@@ -1277,7 +1315,12 @@
       
       setTimeout(() => {
         if (document.body.contains(notification)) {
-          document.body.removeChild(notification);
+          notification.style.animation = 'slideOut 0.3s ease';
+          setTimeout(() => {
+            if (document.body.contains(notification)) {
+              document.body.removeChild(notification);
+            }
+          }, 300);
         }
       }, 5000);
     }
@@ -1377,9 +1420,469 @@
       showNotification('Connection issue. Please refresh the page.', 'error');
     });
 
+    // SIDEBAR NAVIGATION FUNCTIONALITY
+    document.querySelectorAll('.sidebar-btn').forEach(button => {
+      button.addEventListener('click', () => {
+        const section = button.getAttribute('data-section');
+        switchSection(section);
+      });
+    });
+
+    function switchSection(section) {
+      // Hide all sections
+      document.querySelectorAll('.content-section').forEach(sec => {
+        sec.style.display = 'none';
+      });
+      
+      // Remove active class from all sidebar buttons
+      document.querySelectorAll('.sidebar-btn').forEach(btn => {
+        btn.style.background = 'transparent';
+        btn.style.color = '#cbd5e0';
+      });
+      
+      // Show selected section
+      const selectedSection = document.getElementById(section + '-section');
+      if (selectedSection) {
+        selectedSection.style.display = 'flex';
+      }
+      
+      // Highlight active sidebar button
+      const activeBtn = document.querySelector(`.sidebar-btn[data-section="${section}"]`);
+      if (activeBtn) {
+        activeBtn.style.background = 'linear-gradient(135deg, #0a66c2, #2563eb)';
+        activeBtn.style.color = 'white';
+      }
+      
+      // Update header
+      const titles = {
+        chat: { title: 'Community Chat', desc: 'Connect and communicate with your community' },
+        qa: { title: 'Questions & Answers', desc: 'Ask questions and help others find answers' },
+        events: { title: 'Meeting Links', desc: 'Share and join meetings' },
+        groups: { title: 'Community Groups', desc: 'Join or create interest-based groups' }
+      };
+      
+      if (titles[section]) {
+        document.getElementById('sectionTitle').textContent = titles[section].title;
+        document.getElementById('sectionDesc').textContent = titles[section].desc;
+      }
+
+      // Show/hide quick action buttons
+      document.getElementById('btn-qa').style.display = section === 'qa' ? 'inline-block' : 'none';
+      document.getElementById('btn-event').style.display = section === 'events' ? 'inline-block' : 'none';
+      document.getElementById('btn-group').style.display = section === 'groups' ? 'inline-block' : 'none';
+      
+      // Load data for the selected section
+      if (section === 'qa') {
+        loadDiscussions();
+      } else if (section === 'events') {
+        loadEvents();
+      } else if (section === 'groups') {
+        loadGroups();
+      }
+    }
+
+    // DISCUSSIONS/Q&A
+    async function loadDiscussions() {
+      const discussionsList = document.getElementById('discussionsList');
+      discussionsList.innerHTML = '<p style="text-align: center; color: #666;">Loading Q&A...</p>';
+      
+      try {
+        const response = await fetch('/api/discussions');
+        const data = await response.json();
+        
+        if (data.success && data.discussions.length > 0) {
+          discussionsList.innerHTML = data.discussions.map(discussion => `
+            <div style="background: #f8fafc; padding: 1.2rem; margin-bottom: 1rem; border-radius: 8px; border-left: 4px solid #667eea;">
+              <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem;">
+                <div style="flex: 1;">
+                  <h4 style="margin: 0 0 0.5rem; color: #0f172a; font-weight: 700;">${discussion.content.substring(0, 150)}</h4>
+                  <div style="display: flex; gap: 1rem; font-size: 12px; color: #999; margin-bottom: 0.75rem;">
+                    <span><i class="fas fa-user-circle"></i> ${discussion.user?.username}</span>
+                    <span><i class="fas fa-clock"></i> ${new Date(discussion.timestamp).toLocaleString()}</span>
+                  </div>
+                  <div id="responses-${discussion._id}" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;"></div>
+                  <div style="margin-top: 0.75rem;">
+                    <input type="text" placeholder="Write a response..." class="response-input" data-question-id="${discussion._id}" style="width: 100%; padding: 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
+                  </div>
+                </div>
+              </div>
+            </div>
+          `).join('');
+          
+          // Load and display responses for each discussion
+          data.discussions.forEach(discussion => {
+            loadResponses(discussion._id);
+          });
+          
+          // Add response handlers
+          document.querySelectorAll('.response-input').forEach(input => {
+            input.addEventListener('keypress', (e) => {
+              if (e.key === 'Enter') {
+                const questionId = input.getAttribute('data-question-id');
+                const responseText = input.value.trim();
+                if (responseText) {
+                  addResponse(questionId, responseText);
+                  input.value = '';
+                }
+              }
+            });
+          });
+        } else {
+          discussionsList.innerHTML = '<div style="text-align: center; padding: 2rem;"><p style="color: #999; margin-bottom: 1rem;">No questions yet. Be the first to ask!</p><button class="btn-primary" onclick="openModal(\'discussionModal\')" style="display: inline-flex; align-items: center; gap: 0.5rem;"><i class="fas fa-plus"></i> Ask a Question</button></div>';
+        }
+      } catch (error) {
+        console.error('Error loading discussions:', error);
+        discussionsList.innerHTML = '<p style="text-align: center; color: #e74c3c;">Failed to load Q&A</p>';
+      }
+    }
+
+    // EVENTS
+    async function loadEvents() {
+      const eventsList = document.getElementById('eventsList');
+      eventsList.innerHTML = '<p style="text-align: center; color: #666;">Loading meetings...</p>';
+      
+      try {
+        const response = await fetch('/api/events');
+        const data = await response.json();
+        
+        if (data.success && data.events.length > 0) {
+          eventsList.innerHTML = data.events.map(event => `
+            <div style="background: white; padding: 1.5rem; margin-bottom: 1rem; border-radius: 8px; border: 1px solid #e2e8f0;">
+              <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem;">
+                <div style="flex: 1;">
+                  <h4 style="margin: 0 0 0.5rem; color: #0f172a; font-weight: 700;">${event.title}</h4>
+                  <p style="margin: 0 0 0.75rem; color: #666; font-size: 14px; word-break: break-all;">
+                    <i class="fas fa-link"></i> <a href="${event.description}" target="_blank" style="color: #0a66c2; text-decoration: none;">${event.description.substring(0, 50)}...</a>
+                  </p>
+                  <div style="font-size: 12px; color: #999;">
+                    <i class="fas fa-user-circle"></i> ${event.user?.username} • ${new Date(event.timestamp).toLocaleString()}
+                  </div>
+                </div>
+                <button onclick="window.open('${event.description}', '_blank')" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; padding: 0.75rem 1.2rem; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600; white-space: nowrap;">Join</button>
+              </div>
+            </div>
+          `).join('');
+        } else {
+          eventsList.innerHTML = '<div style="text-align: center; padding: 2rem;"><p style="color: #999; margin-bottom: 1rem;">No meeting links shared yet</p><button class="btn-primary" onclick="openModal(\'eventModal\')" style="display: inline-flex; align-items: center; gap: 0.5rem;"><i class="fas fa-plus"></i> Share Meeting</button></div>';
+        }
+      } catch (error) {
+        console.error('Error loading events:', error);
+        eventsList.innerHTML = '<p style="text-align: center; color: #e74c3c;">Failed to load meetings</p>';
+      }
+    }
+
+    // GROUPS
+    let currentGroupId = null;
+
+    async function loadGroups() {
+      const groupsList = document.getElementById('groupsList');
+      groupsList.innerHTML = '<p style="text-align: center; color: #666;">Loading groups...</p>';
+      
+      try {
+        const response = await fetch('/api/groups');
+        const data = await response.json();
+        
+        if (data.success && data.groups.length > 0) {
+          groupsList.innerHTML = data.groups.map(group => `
+            <div style="background: white; padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center; transition: all 0.2s; cursor: pointer;">
+              <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 1rem; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;">
+                <i class="fas fa-users"></i>
+              </div>
+              <h4 style="margin: 0 0 0.5rem; color: #0f172a;">${group.name}</h4>
+              <p style="margin: 0 0 1rem; color: #666; font-size: 14px; min-height: 40px;">${group.description}</p>
+              <div style="display: flex; justify-content: space-around; font-size: 12px; color: #999; margin-bottom: 1rem; padding: 1rem 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">
+                <span><strong>${group.members || 0}</strong> Members</span>
+                <span><strong>${group.posts || 0}</strong> Posts</span>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <button onclick="openGroupChat('${group._id}', '${group.name}')" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">Chat</button>
+                <button onclick="joinGroup('${group._id}')" style="background: linear-gradient(135deg, #0a66c2, #2563eb); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-weight: 600; cursor: pointer; flex: 1;">Join</button>
+              </div>
+            </div>
+          `).join('');
+        } else {
+          groupsList.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: #999;"><p>No groups yet. <a href="#" onclick="openModal(\'groupModal\')">Create one!</a></p></div>';
+        }
+      } catch (error) {
+        console.error('Error loading groups:', error);
+        groupsList.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: #e74c3c;"><p>Failed to load groups</p></div>';
+      }
+    }
+
+    async function openGroupChat(groupId, groupName) {
+      currentGroupId = groupId;
+      const groupsList = document.getElementById('groupsList');
+      const groupChatContainer = document.createElement('div');
+      groupChatContainer.id = 'groupChatContainer';
+      
+      groupChatContainer.innerHTML = `
+        <div style="display: flex; flex-direction: column; height: 100%; background: white; border-radius: 12px; overflow: hidden;">
+          <div style="display: flex; align-items: center; gap: 1rem; padding: 1.5rem; border-bottom: 2px solid #e2e8f0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+            <button onclick="backToGroupsList()" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600;">← Back</button>
+            <h2 style="margin: 0; flex: 1;">${groupName}</h2>
+          </div>
+          
+          <div id="groupMessagesContainer" style="flex: 1; overflow-y: auto; padding: 1.5rem; background: #f8fafc; display: flex; flex-direction: column; gap: 1rem;">
+            <p style="text-align: center; color: #999;">Loading messages...</p>
+          </div>
+          
+          <form id="groupMessageForm" onsubmit="sendGroupMessage(event)" style="padding: 1.5rem; border-top: 2px solid #e2e8f0; background: white; display: flex; gap: 0.75rem;">
+            <input type="text" id="groupMessageInput" placeholder="Type your message..." style="flex: 1; padding: 0.75rem; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; font-family: inherit;" required />
+            <button type="submit" style="background: linear-gradient(135deg, #0a66c2, #2563eb); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-weight: 600; cursor: pointer;">Send</button>
+          </form>
+        </div>
+      `;
+      
+      groupsList.parentElement.replaceChild(groupChatContainer, groupsList);
+      loadGroupMessages(groupId);
+    }
+
+    async function loadGroupMessages(groupId) {
+      try {
+        const response = await fetch(`/api/groups/${groupId}/messages`);
+        const data = await response.json();
+        const messagesContainer = document.getElementById('groupMessagesContainer');
+        
+        if (data.success && data.messages && data.messages.length > 0) {
+          messagesContainer.innerHTML = data.messages.map(msg => {
+            const userName = msg.user?.name || msg.user?.username || 'Anonymous';
+            const userInitial = userName.charAt(0).toUpperCase();
+            const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+            const messageContent = msg.content || msg.message || '';
+            
+            return `
+            <div style="display: flex; gap: 0.75rem; animation: fadeIn 0.3s ease-in;">
+              <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; flex-shrink: 0;">
+                ${userInitial}
+              </div>
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                  <strong style="color: #0f172a;">${userName}</strong>
+                  <span style="font-size: 12px; color: #999;">${timestamp}</span>
+                </div>
+                <div style="background: #f1f5f9; padding: 0.75rem 1rem; border-radius: 8px; color: #333; line-height: 1.4;">
+                  ${messageContent}
+                </div>
+              </div>
+            </div>
+          `;
+          }).join('');
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else {
+          messagesContainer.innerHTML = '<p style="text-align: center; color: #999;">No messages yet. Start the conversation!</p>';
+        }
+      } catch (error) {
+        console.error('Error loading messages:', error);
+      }
+    }
+
+    async function sendGroupMessage(event) {
+      event.preventDefault();
+      const messageInput = document.getElementById('groupMessageInput');
+      const message = messageInput.value.trim();
+      
+      if (!message || !currentGroupId) return;
+      
+      try {
+        const response = await fetch(`/api/groups/${currentGroupId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+          messageInput.value = '';
+          loadGroupMessages(currentGroupId);
+        } else {
+          alert(data.message || 'Failed to send message');
+        }
+      } catch (error) {
+        console.error('Error sending message:', error);
+        alert('Error sending message');
+      }
+    }
+
+    function backToGroupsList() {
+      const groupChatContainer = document.getElementById('groupChatContainer');
+      const groupsList = document.createElement('div');
+      groupsList.id = 'groupsList';
+      groupsList.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem;';
+      groupChatContainer.parentElement.replaceChild(groupsList, groupChatContainer);
+      currentGroupId = null;
+      loadGroups();
+    }
+
+    // MODAL FUNCTIONS
+    function openModal(modalId) {
+      const modal = document.getElementById(modalId);
+      if (modal) {
+        modal.style.display = 'block';
+      }
+    }
+
+    function closeModal(modalId) {
+      const modal = document.getElementById(modalId);
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    // Close modal when clicking outside
+    window.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal')) {
+        e.target.style.display = 'none';
+      }
+    });
+
+    // FORM SUBMISSIONS
+    if (document.getElementById('discussionForm')) {
+      document.getElementById('discussionForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const content = document.getElementById('discussionContent').value;
+        
+        try {
+          const response = await fetch('/api/discussions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: '', content })
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showNotification('Question posted!', 'success');
+            closeModal('discussionModal');
+            document.getElementById('discussionForm').reset();
+            loadDiscussions();
+          } else {
+            showNotification(data.message || 'Failed to post question', 'error');
+          }
+        } catch (error) {
+          console.error('Error posting question:', error);
+          showNotification('Error posting question', 'error');
+        }
+      });
+    }
+
+    if (document.getElementById('eventForm')) {
+      document.getElementById('eventForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const title = document.getElementById('eventTitle').value;
+        const description = document.getElementById('eventDescription').value;
+        const now = new Date();
+        
+        try {
+          const response = await fetch('/api/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, description, startDate: now, endDate: now, eventType: 'meeting' })
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showNotification('Meeting shared!', 'success');
+            closeModal('eventModal');
+            document.getElementById('eventForm').reset();
+            loadEvents();
+          } else {
+            showNotification(data.message || 'Failed to share meeting', 'error');
+          }
+        } catch (error) {
+          console.error('Error sharing meeting:', error);
+          showNotification('Error sharing meeting', 'error');
+        }
+      });
+    }
+
+    if (document.getElementById('groupForm')) {
+      document.getElementById('groupForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const name = document.getElementById('groupName').value;
+        const description = document.getElementById('groupDescription').value;
+        
+        try {
+          const response = await fetch('/api/groups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description })
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showNotification('Group created successfully!', 'success');
+            closeModal('groupModal');
+            document.getElementById('groupForm').reset();
+            loadGroups();
+          } else {
+            showNotification(data.message || 'Failed to create group', 'error');
+          }
+        } catch (error) {
+          console.error('Error creating group:', error);
+          showNotification('Error creating group', 'error');
+        }
+      });
+    }
+
+    // HELPER FUNCTIONS
+    async function loadResponses(questionId) {
+      try {
+        const response = await fetch(`/api/discussions/${questionId}/responses`);
+        const data = await response.json();
+        const responsesContainer = document.getElementById(`responses-${questionId}`);
+        
+        if (data.success && data.responses && data.responses.length > 0) {
+          responsesContainer.innerHTML = data.responses.map(resp => `
+            <div style="background: white; padding: 0.75rem; margin-bottom: 0.75rem; border-radius: 6px; border-left: 3px solid #764ba2;">
+              <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-bottom: 0.25rem;">
+                <strong>${resp.user?.username || 'Anonymous'}</strong>
+                <span>${new Date(resp.timestamp).toLocaleTimeString()}</span>
+              </div>
+              <p style="margin: 0.25rem 0; font-size: 13px; color: #333;">${resp.content}</p>
+            </div>
+          `).join('');
+        } else {
+          responsesContainer.innerHTML = '<p style="font-size: 12px; color: #999;">No responses yet</p>';
+        }
+      } catch (error) {
+        console.error('Error loading responses:', error);
+      }
+    }
+
+    function addResponse(questionId, responseText) {
+      fetch(`/api/discussions/${questionId}/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: responseText })
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          loadResponses(questionId);
+          loadDiscussions();
+        } else {
+          showNotification('Failed to post response', 'error');
+        }
+      });
+    }
+
+    function joinGroup(groupId) {
+      fetch(`/api/groups/${groupId}/join`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+          showNotification(d.message, d.success ? 'success' : 'error');
+          if (d.success) loadGroups();
+        });
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
-      console.log('BookHive Community Chat initialized!');
+      console.log('BookHive Community initialized!');
     });
   </script>
 </body>

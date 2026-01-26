@@ -19,8 +19,14 @@ const dns = require('dns');
 const compression = require('compression');
 const Application = require('./models/Application');
 require('dotenv').config();
-const GEMINI_API_KEY = 'AIzaSyBcnPIGkKdkSpoJaPv3W3mw3uV7c9pH2QI';
+
+// Environment variables
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const MONGODB_URI = process.env.MONGODB_URI;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const SESSION_SECRET = process.env.SESSION_SECRET || 'your-secret-key';
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
@@ -61,10 +67,10 @@ app.set('view engine', 'ejs');
 // Session setup with shorter expiration (30 minutes)
 const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
 app.use(session({
-  secret: 'your-secret-key',
+  secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  store: MongoStore.create({ mongoUrl: 'mongodb+srv://bookhiversd:8D6pLujBM9rLVi8B@bookhive.7h76ryz.mongodb.net/BookHive_RSD?retryWrites=true&w=majority&appName=BookHive' }),
+  store: MongoStore.create({ mongoUrl: MONGODB_URI }),
   cookie: {
       maxAge: SESSION_TIMEOUT,
       secure: process.env.NODE_ENV === 'production',
@@ -160,8 +166,8 @@ function isPipelineSafe(pipeline) {
 app.use(passport.initialize());
 app.use(passport.session());
 passport.use(new GoogleStrategy({
-  clientID: '660588293356-64bhcqs11c72nq2br21f4di7vpvu6fil.apps.googleusercontent.com',
-  clientSecret: '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',
+  clientID: GOOGLE_CLIENT_ID,
+  clientSecret: GOOGLE_CLIENT_SECRET,
   callbackURL: '/auth/google/callback'
 }, async (accessToken, refreshToken, profile, done) => {
   try {
@@ -269,7 +275,34 @@ const messageSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   profession: { type: String, required: true, enum: ['BookHive'] },
   content: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now }
+  timestamp: { type: Date, default: Date.now },
+  // Chat properties
+  isChatbotResponse: { type: Boolean, default: false },
+  // Discussion properties
+  isDiscussion: { type: Boolean, default: false },
+  category: { type: String },
+  tags: [{ type: String }],
+  replies: { type: Number, default: 0 },
+  // Response to discussion
+  isResponse: { type: Boolean, default: false },
+  responseToId: { type: mongoose.Schema.Types.ObjectId },
+  // Event properties
+  isEvent: { type: Boolean, default: false },
+  eventTitle: { type: String },
+  eventStart: { type: Date },
+  eventEnd: { type: Date },
+  eventType: { type: String },
+  eventAttendees: { type: Number, default: 0 },
+  // Group properties
+  isGroup: { type: Boolean, default: false },
+  groupName: { type: String },
+  groupMembers: { type: Number, default: 0 },
+  groupPosts: { type: Number, default: 0 },
+  groupMembersList: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  isGroupMessage: { type: Boolean, default: false },
+  groupId: { type: mongoose.Schema.Types.ObjectId },
+  // Activity tracking
+  isActivity: { type: Boolean, default: false }
 });
 const newsSchema = new mongoose.Schema({
   title: { type: String, required: true },
@@ -371,32 +404,6 @@ app.use((req, res, next) => {
     next();
   }
 });
-// Debug middleware for form submissions
-app.use((req, res, next) => {
-  if (req.method === 'POST' && ['/account/update-profile', '/account/update-password', '/feedback', '/account/delete', '/request-access'].includes(req.path)) {
-    console.log(`Request to ${req.path}:`, {
-      headers: req.headers,
-      body: req.body,
-      session: req.session
-    });
-    const originalJson = res.json;
-    const originalRender = res.render;
-    const originalRedirect = res.redirect;
-    res.json = function (data) {
-      console.log(`Response to ${req.path}: JSON`, data);
-      return originalJson.apply(res, arguments);
-    };
-    res.render = function (view, locals) {
-      console.log(`Response to ${req.path}: Render view=${view}`, locals);
-      return originalRender.apply(res, arguments);
-    };
-    res.redirect = function (url) {
-      console.log(`Response to ${req.path}: Redirect to ${url}`);
-      return originalRedirect.apply(res, arguments);
-    };
-  }
-  next();
-});
 // Multer for profile and password forms
 const formUpload = multer({
   storage: multer.memoryStorage(),
@@ -420,7 +427,7 @@ const fetchUserAndNote = async (req, res, next) => {
 };
 app.use(fetchUserAndNote);
 // MongoDB connection
-mongoose.connect('mongodb+srv://bookhiversd:8D6pLujBM9rLVi8B@bookhive.7h76ryz.mongodb.net/BookHive_RSD?retryWrites=true&w=majority&appName=BookHive', {
+mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 }).then(async () => {
@@ -437,7 +444,7 @@ mongoose.connect('mongodb+srv://bookhiversd:8D6pLujBM9rLVi8B@bookhive.7h76ryz.mo
         isAdmin: true
       });
       await adminUser.save();
-      console.log('Admin user created: username=admin, password=admin123');
+      console.log('Admin user created');
       const adminNote = new Note({
         user: adminUser._id,
         content: 'Admin notes'
@@ -575,11 +582,10 @@ io.on('connection', (socket) => {
   socket.on('joinProfession', async ({ userId, profession }) => {
     socket.join(profession);
     socket.join(userId.toString());
-    console.log(`User ${userId} joined ${profession} chat and user room ${userId}`);
     activeUsers.add(userId);
     const totalUsers = await User.countDocuments();
     socket.emit('chatHistory', {
-      messages: await Message.find({ profession })
+      messages: await Message.find({ profession, isDiscussion: false, isEvent: false, isGroup: false, isResponse: false })
         .sort({ timestamp: -1 })
         .limit(50)
         .populate('user', 'username')
@@ -709,7 +715,6 @@ io.on('connection', (socket) => {
           recipientId: chatRequest.requester.toString(),
           recipientUsername: requesterUser.username
         });
-        console.log(`Chat request accepted: chatId=${chatId}, requester=${chatRequest.requester}, recipient=${chatRequest.recipient}`);
       }
       socket.emit('handleChatRequestResponse', { success: true, message: `Chat request ${action}ed` });
       io.to(chatRequest.requester.toString()).emit('refreshChatRequests');
@@ -738,7 +743,6 @@ io.on('connection', (socket) => {
         .populate('recipient', 'username');
       io.to(senderId.toString()).emit('privateMessage', populatedMessage);
       io.to(recipientId.toString()).emit('privateMessage', populatedMessage);
-      console.log(`Private message sent: chatId=${chatId}, sender=${senderId}, recipient=${recipientId}`);
     } catch (err) {
       console.error('Private message error:', err);
       socket.emit('privateMessageError', { success: false, message: 'Failed to send private message' });
@@ -752,7 +756,6 @@ io.on('connection', (socket) => {
         .sort({ timestamp: -1 })
         .limit(50)
         .then(messages => messages.reverse());
-      console.log(`Fetched private messages for chatId=${chatId}: ${messages.length} messages`);
       callback({ success: true, messages });
     } catch (err) {
       console.error('Get private chat messages error:', err);
@@ -774,23 +777,15 @@ io.on('connection', (socket) => {
 });
 // Google Auth Routes
 app.get('/auth/google', (req, res, next) => {
-  console.log('Initiating Google OAuth, protocol:', req.protocol, 'host:', req.get('host'));
   passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
 });
 app.get('/auth/google/callback', (req, res, next) => {
-  console.log('Google OAuth callback, protocol:', req.protocol, 'host:', req.get('host'), 'session:', req.session);
   passport.authenticate('google', { failureRedirect: '/' }, (err, user) => {
-    if (err) {
-      console.error('Google OAuth callback error:', err);
-      return res.redirect('/');
-    }
-    if (!user) {
-      console.error('No user returned from Google OAuth');
+    if (err || !user) {
       return res.redirect('/');
     }
     req.session.userId = user._id;
     req.session.lastActivity = Date.now();
-    console.log('Session set for user:', user._id);
     if (user.isAdmin) {
       res.redirect('/admin');
     } else if (!user.profession) {
@@ -805,20 +800,12 @@ app.get('/', async (req, res) => {
     const totalUsers = await User.countDocuments();
     const appDir = path.join(__dirname, 'applications');
     const appFiles = await fs.readdir(appDir);
-    const staticApps = appFiles
-      .map(file => ({
-        name: path.basename(file, '.js').replace(/-/g, ' ').toUpperCase(),
-        id: path.basename(file, '.js'),
-        iconPath: '/images/default-app-icon.png' // Default icon for static apps
-      }));
     const userApps = await Application.find({}).select('name _id iconPath');
-    const applications = [
-      ...userApps.map(app => ({
-        id: app._id.toString(),
-        name: app.name,
-        iconPath: app.iconPath
-      }))
-    ];
+    const applications = userApps.map(app => ({
+      id: app._id.toString(),
+      name: app.name,
+      iconPath: app.iconPath
+    }));
     res.render('index', {
       user: req.user,
       note: req.note ? req.note.content : '',
@@ -892,19 +879,11 @@ app.get('/bookhive', isAuthenticated, async (req, res) => {
         hasAccess
       };
     });
-    console.log('Rendering bookhive with data:', {
-      newBooks,
-      myBooks,
-      user,
-      pendingBookIds,
-      totalUsers: await User.countDocuments(),
-      activeUsers: activeUsers.size
-    });
     res.render('bookhive', {
       user,
       newBooks: booksWithStatus,
       myBooks,
-      pendingBookIds: pendingBookIds || [], // Ensure pendingBookIds is always defined
+      pendingBookIds: pendingBookIds || [],
       note: req.note ? req.note.content : '',
       totalUsers: await User.countDocuments(),
       activeUsers: activeUsers.size,
@@ -1139,17 +1118,6 @@ app.post('/upload', isAuthenticated, upload.single('file'), async (req, res) => 
       return res.status(400).render('upload', { error: 'Only PDF files allowed', user: req.user, note: req.note ? req.note.content : '' });
     }
     
-    // Skip content validation for faster uploads (optional - remove if needed)
-    // const isSafe = await validatePdfContent(req.file.buffer);
-    // if (!isSafe) {
-    //   return res.status(400).render('upload', {
-    //     error: 'Adult content detected. This content cannot be uploaded.',
-    //     user: req.user,
-    //     note: req.note ? req.note.content : ''
-    //   });
-    // }
-    
-    // Parse PDF metadata but don't store text content to save space
     let numPages = 0;
     try {
       const pdfData = await pdfParse(req.file.buffer);
@@ -2030,7 +1998,6 @@ app.post('/request-access', isAuthenticated, async (req, res) => {
   try {
     const { bookId } = req.body;
     const user = req.user;
-    console.log(`Processing access request: bookId=${bookId}, userId=${user._id}`);
     if (!bookId) {
       return res.status(400).json({ success: false, message: 'Book ID is required' });
     }
@@ -2039,11 +2006,9 @@ app.post('/request-access', isAuthenticated, async (req, res) => {
     }
     const book = await Book.findById(bookId).populate('uploadedBy', 'username email profession');
     if (!book) {
-      console.error(`Book not found: bookId=${bookId}`);
       return res.status(404).json({ success: false, message: 'Book not found' });
     }
     if (book.visibility !== 'restricted' || book.uploadedBy.toString() === user._id || book.accessList.includes(user._id)) {
-      console.log(`Access not required: visibility=${book.visibility}, isOwner=${book.uploadedBy.toString() === user._id}, hasAccess=${book.accessList.includes(user._id)})`);
       return res.status(400).json({ success: false, message: 'Access already granted or not required' });
     }
     const existingRequest = await Request.findOne({
@@ -2052,7 +2017,6 @@ app.post('/request-access', isAuthenticated, async (req, res) => {
       status: 'pending'
     });
     if (existingRequest) {
-      console.log(`Existing pending request found: requestId=${existingRequest._id}`);
       return res.status(400).json({ success: false, message: 'Access request already pending' });
     }
     const accessRequest = new Request({
@@ -2082,11 +2046,9 @@ app.post('/request-access', isAuthenticated, async (req, res) => {
         }
       };
       await transporter.sendMail(mailOptions);
-      console.log(`Access request email sent to: ${book.uploadedBy.email}`);
     } catch (emailErr) {
-      console.error(`Error sending access request email to ${book.uploadedBy.email}:`, emailErr);
+      console.error(`Error sending access request email:`, emailErr);
     }
-    console.log(`Access request created: requestId=${accessRequest._id}`);
     res.setHeader('Content-Type', 'application/json');
     return res.json({ success: true, message: 'Access request sent successfully' });
   } catch (err) {
@@ -2379,7 +2341,6 @@ app.get('/applications/:appId', isAuthenticated, async (req, res) => {
       ? appId.replace(/-/g, ' ').toUpperCase()
       : (await Application.findById(appId))?.name || 'User Application';
     const applications = await Application.find({}).select('name _id').lean();
-    console.log('Rendering app:', { appId, appName });
     res.render('application', {
       applications: applications.map(app => ({
         id: app._id.toString(),
@@ -2510,6 +2471,365 @@ app.get('/private-chat/:chatId', isAuthenticated, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to load chat history' });
   }
 });
+
+// COMMUNITY FEATURE APIs
+// Discussions API
+app.get('/api/discussions', isAuthenticated, async (req, res) => {
+  try {
+    const discussions = await Message.find({ 
+      profession: req.user.profession,
+      isDiscussion: true 
+    })
+    .populate('user', 'username')
+    .sort({ timestamp: -1 })
+    .limit(20);
+    
+    res.json({ success: true, discussions: discussions || [] });
+  } catch (err) {
+    console.error('Error fetching discussions:', err);
+    res.status(500).json({ success: false, message: 'Failed to load discussions' });
+  }
+});
+
+app.post('/api/discussions', isAuthenticated, async (req, res) => {
+  try {
+    const { content } = req.body;
+    
+    if (!content) {
+      return res.status(400).json({ success: false, message: 'Question required' });
+    }
+    
+    const discussion = new Message({
+      user: req.user._id,
+      content: content,
+      profession: req.user.profession,
+      isDiscussion: true,
+      category: 'general',
+      tags: [],
+      timestamp: new Date()
+    });
+    
+    await discussion.save();
+    await discussion.populate('user', 'username');
+    
+    res.json({ success: true, message: 'Question posted!', discussion });
+  } catch (err) {
+    console.error('Error creating discussion:', err);
+    res.status(500).json({ success: false, message: 'Failed to post question' });
+  }
+});
+
+// Respond to a discussion
+app.post('/api/discussions/:id/respond', isAuthenticated, async (req, res) => {
+  try {
+    const { content } = req.body;
+    
+    if (!content) {
+      return res.status(400).json({ success: false, message: 'Response required' });
+    }
+    
+    const response = new Message({
+      user: req.user._id,
+      content: content,
+      profession: req.user.profession,
+      isResponse: true,
+      responseToId: req.params.id,
+      timestamp: new Date()
+    });
+    
+    await response.save();
+    await response.populate('user', 'username name');
+    
+    res.json({ success: true, message: 'Response posted!', response });
+  } catch (err) {
+    console.error('Error posting response:', err);
+    res.status(500).json({ success: false, message: 'Failed to post response' });
+  }
+});
+
+// Get responses for a discussion
+app.get('/api/discussions/:id/responses', isAuthenticated, async (req, res) => {
+  try {
+    const responses = await Message.find({
+      responseToId: req.params.id,
+      isResponse: true,
+      isDiscussion: false,
+      isEvent: false,
+      isGroup: false,
+      isGroupMessage: false
+    })
+    .populate('user', 'username name')
+    .sort({ timestamp: 1 });
+    
+    res.json({ success: true, responses });
+  } catch (err) {
+    console.error('Error fetching responses:', err);
+    res.status(500).json({ success: false, message: 'Failed to load responses' });
+  }
+});
+
+// Events API
+app.get('/api/events', isAuthenticated, async (req, res) => {
+  try {
+    const events = await Message.find({ 
+      profession: req.user.profession,
+      isEvent: true 
+    })
+    .populate('user', 'username')
+    .sort({ timestamp: -1 })
+    .limit(20);
+    
+    res.json({ success: true, events: events.map(e => ({
+      _id: e._id,
+      title: e.eventTitle || 'Untitled Event',
+      description: e.content,
+      startDate: e.eventStart || e.timestamp,
+      endDate: e.eventEnd || e.timestamp,
+      type: e.eventType || 'meetup',
+      attendees: e.eventAttendees || 0,
+      user: e.user
+    })) || [] });
+  } catch (err) {
+    console.error('Error fetching events:', err);
+    res.status(500).json({ success: false, message: 'Failed to load events' });
+  }
+});
+
+app.post('/api/events', isAuthenticated, async (req, res) => {
+  try {
+    const { title, description, startDate, endDate, eventType } = req.body;
+    
+    if (!title) {
+      return res.status(400).json({ success: false, message: 'Title required' });
+    }
+    
+    const event = new Message({
+      user: req.user._id,
+      content: description || '',
+      eventTitle: title,
+      eventStart: startDate ? new Date(startDate) : new Date(),
+      eventEnd: endDate ? new Date(endDate) : new Date(),
+      eventType: eventType || 'meeting',
+      profession: req.user.profession,
+      isEvent: true,
+      timestamp: new Date()
+    });
+    
+    await event.save();
+    await event.populate('user', 'username');
+    
+    res.json({ success: true, message: 'Event created!', event });
+  } catch (err) {
+    console.error('Error creating event:', err);
+    res.status(500).json({ success: false, message: 'Failed to create event' });
+  }
+});
+
+app.post('/api/events/:eventId/join', isAuthenticated, async (req, res) => {
+  try {
+    const event = await Message.findById(req.params.eventId);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found' });
+    }
+    
+    if (!event.eventAttendees) event.eventAttendees = 0;
+    event.eventAttendees++;
+    await event.save();
+    
+    res.json({ success: true, message: 'Joined event successfully!' });
+  } catch (err) {
+    console.error('Error joining event:', err);
+    res.status(500).json({ success: false, message: 'Failed to join event' });
+  }
+});
+
+// Groups API
+app.get('/api/groups', isAuthenticated, async (req, res) => {
+  try {
+    const groups = await Message.find({ 
+      profession: req.user.profession,
+      isGroup: true 
+    })
+    .populate('user', 'username')
+    .sort({ timestamp: -1 })
+    .limit(20);
+    
+    res.json({ success: true, groups: groups.map(g => ({
+      _id: g._id,
+      name: g.groupName || 'Untitled Group',
+      description: g.content,
+      members: g.groupMembers || 0,
+      posts: g.groupPosts || 0,
+      user: g.user
+    })) || [] });
+  } catch (err) {
+    console.error('Error fetching groups:', err);
+    res.status(500).json({ success: false, message: 'Failed to load groups' });
+  }
+});
+
+app.post('/api/groups', isAuthenticated, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Group name required' });
+    }
+    
+    const group = new Message({
+      user: req.user._id,
+      content: description || '',
+      groupName: name,
+      profession: req.user.profession,
+      isGroup: true,
+      groupMembers: 1,
+      groupMembersList: [req.user._id],
+      groupPosts: 0,
+      timestamp: new Date()
+    });
+    
+    await group.save();
+    await group.populate('user', 'username');
+    
+    res.json({ success: true, message: 'Group created!', group });
+  } catch (err) {
+    console.error('Error creating group:', err);
+    res.status(500).json({ success: false, message: 'Failed to create group' });
+  }
+});
+
+app.post('/api/groups/:groupId/join', isAuthenticated, async (req, res) => {
+  try {
+    const group = await Message.findById(req.params.groupId);
+    if (!group) {
+      return res.status(404).json({ success: false, message: 'Group not found' });
+    }
+    
+    // Check if user already joined
+    if (!group.groupMembersList) {
+      group.groupMembersList = [];
+    }
+    
+    if (group.groupMembersList.includes(req.user._id)) {
+      return res.json({ success: false, message: 'You already joined this group' });
+    }
+    
+    group.groupMembersList.push(req.user._id);
+    if (!group.groupMembers) group.groupMembers = 0;
+    group.groupMembers = group.groupMembersList.length;
+    await group.save();
+    
+    res.json({ success: true, message: 'Joined group successfully!' });
+  } catch (err) {
+    console.error('Error joining group:', err);
+    res.status(500).json({ success: false, message: 'Failed to join group' });
+  }
+});
+
+// Group Messages
+app.post('/api/groups/:groupId/messages', isAuthenticated, async (req, res) => {
+  try {
+    const { message: messageContent } = req.body;
+    const group = await Message.findById(req.params.groupId);
+    
+    if (!group || !group.isGroup) {
+      return res.status(404).json({ success: false, message: 'Group not found' });
+    }
+    
+    // Check if user is member (convert to string for comparison)
+    const userIdStr = req.user._id.toString();
+    const isMember = group.groupMembersList && group.groupMembersList.some(memberId => memberId.toString() === userIdStr);
+    
+    if (!isMember) {
+      return res.status(403).json({ success: false, message: 'Not a member of this group' });
+    }
+    
+    const msg = new Message({
+      user: req.user._id,
+      content: messageContent,
+      profession: req.user.profession,
+      isGroupMessage: true,
+      groupId: req.params.groupId,
+      timestamp: new Date()
+    });
+    
+    await msg.save();
+    await msg.populate('user', 'name username');
+    
+    res.json({ success: true, message: 'Message sent!', data: msg });
+  } catch (err) {
+    console.error('Error sending group message:', err);
+    res.status(500).json({ success: false, message: 'Failed to send message' });
+  }
+});
+
+// Get Group Messages
+app.get('/api/groups/:groupId/messages', isAuthenticated, async (req, res) => {
+  try {
+    const messages = await Message.find({ 
+      groupId: req.params.groupId,
+      isGroupMessage: true
+    })
+    .populate('user', 'name username')
+    .sort({ timestamp: -1 })
+    .limit(50);
+    
+    res.json({ success: true, messages: messages.reverse() || [] });
+  } catch (err) {
+    console.error('Error fetching group messages:', err);
+    res.status(500).json({ success: false, message: 'Failed to load messages' });
+  }
+});
+
+// Activity Feed API
+app.get('/api/activity', isAuthenticated, async (req, res) => {
+  try {
+    const activity = await Message.find({ profession: req.user.profession })
+      .populate('user', 'username')
+      .sort({ timestamp: -1 })
+      .limit(30);
+    
+    const activityFeed = activity.map(msg => ({
+      _id: msg._id,
+      user: msg.user,
+      description: msg.isDiscussion ? 'started a discussion' : msg.isEvent ? 'created an event' : msg.isGroup ? 'created a group' : 'posted a message',
+      type: msg.isDiscussion ? 'discussion' : msg.isEvent ? 'event' : msg.isGroup ? 'group' : 'message',
+      timestamp: msg.timestamp
+    }));
+    
+    res.json({ success: true, activity: activityFeed });
+  } catch (err) {
+    console.error('Error fetching activity:', err);
+    res.status(500).json({ success: false, message: 'Failed to load activity' });
+  }
+});
+
+// Top Members API
+app.get('/api/top-members', isAuthenticated, async (req, res) => {
+  try {
+    const members = await User.find({ 
+      profession: req.user.profession,
+      isAdmin: false 
+    })
+    .sort({ points: -1 })
+    .limit(12)
+    .select('username profession points');
+    
+    const membersWithContributions = members.map(member => ({
+      _id: member._id,
+      username: member.username,
+      profession: member.profession || 'Member',
+      points: member.points || 0,
+      contributions: Math.floor((member.points || 0) / 10)
+    }));
+    
+    res.json({ success: true, members: membersWithContributions });
+  } catch (err) {
+    console.error('Error fetching members:', err);
+    res.status(500).json({ success: false, message: 'Failed to load members' });
+  }
+});
+
 // Update sendDailyPublicationEmails to handle multiple images and documents
 async function sendDailyPublicationEmails() {
   try {
@@ -2591,43 +2911,34 @@ app.get('/create-app', isAuthenticated, (req, res) => {
 });
 // Update the /api/applications/create post route to store icon as Buffer
 app.post('/api/applications/create', isAuthenticated, ApplicationImageUpload.single('icon'), async (req, res) => {
-  console.log('req.body:', req.body); // Debug: Log form data
-  console.log('req.file:', req.file); // Debug: Log file data
   const { 'app-name': name, 'app-description': description, 'app-code': code } = req.body;
   try {
-    // Validate inputs
     if (!name || !code) {
-      console.log('Validation failed:', { name, code }); // Debug: Log validation failure
       return res.status(400).json({ success: false, message: 'Application name and code are required.' });
     }
     const scriptsDir = path.join(__dirname, 'user-applications', 'scripts');
     const metadataDir = path.join(__dirname, 'user-applications', 'metadata');
-    // Create directories if they don't exist
     await fs.mkdir(scriptsDir, { recursive: true });
     await fs.mkdir(metadataDir, { recursive: true });
-    // Generate unique file name for script
     const appId = Date.now().toString();
     const scriptPath = path.join(scriptsDir, `user-app-${appId}.js`);
     const metadataPath = path.join(metadataDir, `user-app-${appId}.json`);
-    // Save script to file
     await fs.writeFile(scriptPath, code);
-    // Save metadata to database
     const application = new Application({
       name,
       description: description || '',
       creatorId: req.user._id,
       filePath: scriptPath,
-      icon: req.file ? req.file.buffer : null, // Store as Buffer
-      iconType: req.file ? req.file.mimetype : null // Store MIME type
+      icon: req.file ? req.file.buffer : null,
+      iconType: req.file ? req.file.mimetype : null
     });
     await application.save();
-    // Save metadata to JSON file (update icon to indicate it's a Buffer, but since JSON is metadata, perhaps omit icon details or adjust)
     await fs.writeFile(metadataPath, JSON.stringify({
       id: application._id.toString(),
       name,
       description: description || '',
       creatorId: req.user._id,
-      iconPath: `/app-icon/${application._id}` // Use a route path instead of file path
+      iconPath: `/app-icon/${application._id}`
     }));
     res.json({ success: true });
   } catch (error) {
@@ -2638,9 +2949,7 @@ app.post('/api/applications/create', isAuthenticated, ApplicationImageUpload.sin
 app.get('/app-icon/:appId', isAuthenticated, async (req, res) => {
   try {
     const application = await Application.findById(req.params.appId);
-    console.log('Fetching icon for app:', req.params.appId, 'Found:', !!application, 'Has icon:', !!application?.icon);
     if (!application || !application.icon) {
-      console.log('Serving default icon for app:', req.params.appId);
       return res.sendFile(path.join(__dirname, 'public', 'images', 'default-app-icon.png'));
     }
     res.set({
@@ -2658,7 +2967,6 @@ app.get('/applications/:appId/script', isAuthenticated, async (req, res) => {
   try {
     const appId = req.params.appId;
     let appPath = path.join(__dirname, 'applications', `${appId}.js`);
-    console.log('Attempting to serve script for appId:', appId, 'Path:', appPath);
     try {
       await fs.access(appPath);
       res.set('Content-Type', 'text/javascript');
@@ -2666,10 +2974,8 @@ app.get('/applications/:appId/script', isAuthenticated, async (req, res) => {
     } catch {
       const userApp = await Application.findById(appId);
       if (!userApp) {
-        console.log('App not found for appId:', appId);
         return res.status(404).send('Application script not found');
       }
-      console.log('Serving user app script from:', userApp.filePath);
       res.set('Content-Type', 'text/javascript');
       res.sendFile(userApp.filePath);
     }
