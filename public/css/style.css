@@ -959,23 +959,161 @@ footer p {
   display: none;
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-  .features {
-    grid-template-columns: 1fr;
+/* ===== RESPONSIVE DESIGN - COMPREHENSIVE ===== */
+
+/* Ultra High-Definition: 2560px and above */
+@media (min-width: 2560px) {
+  .container {
+    max-width: 2200px;
+    padding: 0 30px;
+  }
+
+  html, body {
+    font-size: 18px;
+  }
+
+  header h1 {
+    font-size: 2.5rem;
+  }
+
+  .hero h2 {
+    font-size: 3.5rem;
   }
 
   .book-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 2.5rem;
+  }
+
+  .btn {
+    padding: 0.8rem 1.2rem;
+    font-size: 1.1rem;
+  }
+}
+
+/* Large Desktop: 1920px - 2559px */
+@media (min-width: 1920px) and (max-width: 2559px) {
+  .container {
+    max-width: 1800px;
+    padding: 0 25px;
+  }
+
+  html, body {
+    font-size: 17px;
+  }
+
+  .book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 2rem;
+  }
+
+  .hero h2 {
+    font-size: 3rem;
+  }
+}
+
+/* Standard Desktop: 1024px - 1919px */
+@media (min-width: 1024px) and (max-width: 1919px) {
+  .container {
+    max-width: 1200px;
+  }
+
+  .book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .hero h2 {
+    font-size: 2.5rem;
+  }
+}
+
+/* Tablet Landscape & Large Phones: 768px - 1023px */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .container {
+    width: 95%;
+    max-width: 900px;
+    padding: 0 15px;
+  }
+
+  header .container {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .nav-menu {
+    width: 100%;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+
+  nav a {
+    font-size: 0.95rem;
+    padding: 0.4rem 0.8rem;
+  }
+
+  header h1 {
+    font-size: 1.6rem;
+  }
+
+  .hero h2 {
+    font-size: 2rem;
+  }
+
+  .hero p {
+    font-size: 1rem;
+  }
+
+  .features {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+  }
+
+  .book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .book-card {
+    border-radius: 6px;
+  }
+
+  .book-cover {
+    height: 160px;
+  }
+
+  .book-info {
+    padding: 1rem;
+  }
+
+  .book-info h3 {
+    font-size: 1rem;
   }
 
   .search-container form {
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.8rem;
   }
 
   .search-container input {
     width: 100%;
+    font-size: 1rem;
+  }
+
+  .modal-content {
+    width: 95%;
+    max-width: 600px;
+  }
+
+  .form-container {
+    max-width: 90%;
+    padding: 1.5rem;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    gap: 8px;
   }
 
   .info-row {
@@ -985,30 +1123,637 @@ footer p {
 
   .form-actions {
     flex-direction: column;
+    gap: 0.8rem;
   }
 
   .form-actions .btn {
     width: 100%;
   }
+
+  .cta-buttons {
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .cta-buttons .btn {
+    width: 100%;
+  }
 }
 
-@media (max-width: 480px) {
+/* Tablet Portrait: 600px - 767px */
+@media (min-width: 600px) and (max-width: 767px) {
+  .container {
+    width: 95%;
+    max-width: 700px;
+    padding: 0 12px;
+  }
+
+  html, body {
+    font-size: 14px;
+  }
+
   header .container {
     flex-direction: column;
-    gap: 1rem;
-    align-items: flex-start;
+    align-items: center;
+    text-align: center;
+  }
+
+  header h1 {
+    font-size: 1.4rem;
   }
 
   .nav-menu {
     width: 100%;
-    gap: 1rem;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  nav a {
+    font-size: 0.9rem;
+    padding: 0.35rem 0.6rem;
   }
 
   .hero h2 {
-    font-size: 2rem;
+    font-size: 1.8rem;
+  }
+
+  .hero p {
+    font-size: 0.95rem;
+  }
+
+  h2 {
+    font-size: 1.6rem;
+  }
+
+  h3 {
+    font-size: 1.3rem;
+  }
+
+  .features {
+    grid-template-columns: 1fr;
+    gap: 1.2rem;
+  }
+
+  .book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+  }
+
+  .book-cover {
+    height: 140px;
+  }
+
+  .book-info {
+    padding: 0.8rem;
+  }
+
+  .book-info h3 {
+    font-size: 0.95rem;
+  }
+
+  .btn {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.85rem;
+  }
+
+  .form-container {
+    max-width: 95%;
+    padding: 1.2rem;
+  }
+
+  .modal-content {
+    width: 95%;
+    padding: 1.2rem;
+  }
+
+  .search-container form {
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .requests-table {
+    font-size: 0.9rem;
+  }
+
+  .requests-table th,
+  .requests-table td {
+    padding: 8px;
+  }
+}
+
+/* Large Phone: 480px - 599px */
+@media (min-width: 480px) and (max-width: 599px) {
+  .container {
+    width: 95%;
+    padding: 0 10px;
+  }
+
+  html, body {
+    font-size: 13px;
+  }
+
+  header .container {
+    flex-direction: column;
+    gap: 0.8rem;
+    align-items: center;
+  }
+
+  header h1 {
+    font-size: 1.3rem;
+  }
+
+  .logo {
+    max-width: 120px;
+  }
+
+  .nav-menu {
+    width: 100%;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  nav a {
+    font-size: 0.85rem;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .hero {
+    padding: 2rem 0;
+  }
+
+  .hero h2 {
+    font-size: 1.5rem;
+  }
+
+  .hero p {
+    font-size: 0.9rem;
+  }
+
+  h2 {
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+  }
+
+  h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .features {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .feature {
+    padding: 1.2rem;
+  }
+
+  .book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.8rem;
+  }
+
+  .book-cover {
+    height: 120px;
+  }
+
+  .book-info {
+    padding: 0.7rem;
+  }
+
+  .book-info h3 {
+    font-size: 0.9rem;
+  }
+
+  .book-info .author,
+  .book-info .owner,
+  .book-info .file-type {
+    font-size: 0.8rem;
+  }
+
+  .btn {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.8rem;
+  }
+
+  .form-container {
+    max-width: 98%;
+    padding: 1rem;
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .modal-content {
+    width: 98%;
+    padding: 1rem;
   }
 
   .cta-buttons {
     flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .cta-buttons .btn {
+    width: 100%;
+  }
+
+  .search-container form {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .account-section {
+    padding: 1rem;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .requests-table {
+    font-size: 0.85rem;
+  }
+
+  .requests-table th,
+  .requests-table td {
+    padding: 6px;
+  }
+}
+
+/* Small Phone: 360px - 479px */
+@media (max-width: 479px) {
+  .container {
+    width: 96%;
+    padding: 0 8px;
+  }
+
+  html, body {
+    font-size: 12px;
+  }
+
+  header {
+    padding: 0.8rem 0;
+    margin-bottom: 1.5rem;
+  }
+
+  header .container {
+    flex-direction: column;
+    gap: 0.6rem;
+    align-items: center;
+    text-align: center;
+  }
+
+  header h1 {
+    font-size: 1.2rem;
+  }
+
+  .logo {
+    max-width: 100px;
+  }
+
+  .nav-menu {
+    width: 100%;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  nav a {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.4rem;
+  }
+
+  .hero {
+    padding: 1.5rem 0;
+  }
+
+  .hero h2 {
+    font-size: 1.3rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .hero p {
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.2rem;
+    margin-bottom: 0.8rem;
+  }
+
+  h3 {
+    font-size: 1rem;
+    margin-bottom: 0.6rem;
+  }
+
+  section {
+    margin-bottom: 1.5rem;
+  }
+
+  .features {
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+    margin: 1.5rem 0;
+  }
+
+  .feature {
+    padding: 1rem;
+  }
+
+  .feature h3 {
+    margin-bottom: 0.4rem;
+  }
+
+  .book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.6rem;
+    margin-top: 1.5rem;
+  }
+
+  .book-card {
+    border-radius: 4px;
+  }
+
+  .book-cover {
+    height: 100px;
+  }
+
+  .book-icon {
+    font-size: 2rem;
+  }
+
+  .book-info {
+    padding: 0.6rem;
+  }
+
+  .book-info h3 {
+    font-size: 0.85rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .book-info .author,
+  .book-info .owner,
+  .book-info .file-type {
+    font-size: 0.75rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .book-info .upload-date {
+    font-size: 0.7rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .book-actions {
+    gap: 0.3rem;
+  }
+
+  .btn {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .btn-small {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+  }
+
+  .form-container {
+    max-width: 98%;
+    padding: 0.8rem;
+    margin: 0 auto;
+  }
+
+  .form-container h2 {
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+  }
+
+  .form-group {
+    margin-bottom: 0.8rem;
+  }
+
+  .form-group label {
+    font-size: 0.85rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    padding: 0.6rem;
+    font-size: 0.95rem;
+  }
+
+  .modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .modal-content {
+    width: 98%;
+    margin: 20% auto;
+    padding: 0.8rem;
+    border-radius: 6px;
+  }
+
+  .close {
+    font-size: 20px;
+  }
+
+  .cta-buttons {
+    flex-direction: column;
+    gap: 0.6rem;
+    justify-content: center;
+  }
+
+  .cta-buttons .btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .search-container {
+    margin-bottom: 1.5rem;
+  }
+
+  .search-container form {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .search-container input {
+    width: 100%;
+    padding: 0.6rem;
+    font-size: 0.95rem;
+  }
+
+  .search-container .btn {
+    width: 100%;
+    padding: 0.6rem;
+  }
+
+  .account-section {
+    padding: 0.8rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .info-row {
+    flex-direction: column;
+    text-align: left;
+    padding: 0.4rem;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-actions .btn {
+    width: 100%;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .requests-table {
+    font-size: 0.8rem;
+    overflow-x: auto;
+  }
+
+  .requests-table th,
+  .requests-table td {
+    padding: 5px;
+  }
+
+  .empty-state {
+    padding: 1.5rem;
+  }
+
+  .error-container {
+    padding: 1.5rem;
+    margin: 1rem auto;
+  }
+
+  .error-container h2 {
+    margin-bottom: 0.8rem;
+    font-size: 1.2rem;
+  }
+
+  .error-container p {
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+  }
+
+  footer {
+    padding: 1rem 0;
+    margin-top: 2rem;
+  }
+
+  footer p {
+    font-size: 0.8rem;
+  }
+}
+
+/* Extra Small Phone: Below 360px */
+@media (max-width: 359px) {
+  html, body {
+    font-size: 11px;
+  }
+
+  .container {
+    width: 97%;
+    padding: 0 6px;
+  }
+
+  header h1 {
+    font-size: 1rem;
+  }
+
+  .nav-menu {
+    gap: 4px;
+  }
+
+  nav a {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.35rem;
+  }
+
+  .hero h2 {
+    font-size: 1.1rem;
+  }
+
+  .book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
+    gap: 0.5rem;
+  }
+
+  .book-cover {
+    height: 90px;
+  }
+
+  .btn {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.7rem;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    font-size: 0.9rem;
+  }
+}
+
+/* ===== ZOOM/PINCH HANDLING ===== */
+@supports ((-webkit-touch-callout: none)) {
+  /* iOS Safari specific */
+  body {
+    -webkit-user-scalable: yes;
+    -webkit-touch-callout: none;
+  }
+
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Device orientation handling */
+@media (orientation: portrait) {
+  body {
+    min-height: 100vh;
+  }
+}
+
+@media (orientation: landscape) {
+  body {
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 0.6rem 0;
+  }
+
+  .hero {
+    padding: 1.5rem 0;
   }
 }
