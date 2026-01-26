@@ -5,6 +5,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('chatbot-input');
     const container = document.getElementById('chatbot-container');
     const chatBody = document.getElementById('chatbot-body');
+    
+    // Feedback modal elements
+    const feedbackModal = document.getElementById('feedback-modal');
+    const feedbackModalClose = document.querySelector('.feedback-modal-close');
+    const feedbackButtons = document.querySelectorAll('.feedback-btn');
+    const feedbackSubmitBtn = document.getElementById('feedback-submit-btn');
+    const feedbackText = document.getElementById('feedback-text');
+    
+    let selectedFeedback = null;
+    let currentResponseData = null;
 
     // Toggle chatbot visibility when the floating icon is clicked
     if (toggleBtn) {
@@ -23,8 +33,77 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
+    // Close feedback modal
+    if (feedbackModalClose) {
+        feedbackModalClose.addEventListener('click', () => {
+            feedbackModal.style.display = 'none';
+            selectedFeedback = null;
+            feedbackText.value = '';
+        });
+    }
+    
+    // Close modal when clicking outside
+    if (feedbackModal) {
+        window.addEventListener('click', (e) => {
+            if (e.target === feedbackModal) {
+                feedbackModal.style.display = 'none';
+                selectedFeedback = null;
+                feedbackText.value = '';
+            }
+        });
+    }
+    
+    // Handle feedback button selection
+    feedbackButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            feedbackButtons.forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            selectedFeedback = btn.dataset.feedback;
+        });
+    });
+    
+    // Handle feedback submission
+    if (feedbackSubmitBtn) {
+        feedbackSubmitBtn.addEventListener('click', async () => {
+            if (!selectedFeedback) {
+                alert('Please select a feedback option');
+                return;
+            }
+            
+            const comments = feedbackText.value.trim();
+            
+            try {
+                const response = await fetch('/api/chatbot/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: currentResponseData?.query || '',
+                        response: currentResponseData?.response || '',
+                        userFeedback: selectedFeedback,
+                        userComments: comments
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Thank you for your feedback! 🙏');
+                    feedbackModal.style.display = 'none';
+                    selectedFeedback = null;
+                    feedbackText.value = '';
+                } else {
+                    alert('Failed to submit feedback. Please try again.');
+                }
+            } catch (error) {
+                console.error('Feedback submission error:', error);
+                alert('Error submitting feedback. Please try again.');
+            }
+        });
+    }
+    
     // Function to add a new message to the chat window
-    const addMessage = (text, sender) => {
+    const addMessage = (text, sender, responseData = null) => {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('chat-message', sender);
         
@@ -37,6 +116,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const p = document.createElement('p');
         p.innerHTML = formattedText;
         messageDiv.appendChild(p);
+        
+        // Add feedback button for bot messages that have feedback prompts
+        if (sender === 'bot' && text.includes('Was this helpful')) {
+            const feedbackButtonDiv = document.createElement('div');
+            feedbackButtonDiv.className = 'message-feedback-btn-container';
+            
+            const feedbackBtn = document.createElement('button');
+            feedbackBtn.className = 'message-feedback-btn';
+            feedbackBtn.innerHTML = '<i class="fas fa-comment"></i> Share Feedback';
+            feedbackBtn.addEventListener('click', () => {
+                currentResponseData = responseData;
+                feedbackModal.style.display = 'block';
+                selectedFeedback = null;
+                feedbackButtons.forEach(b => b.classList.remove('selected'));
+                feedbackText.value = '';
+            });
+            
+            feedbackButtonDiv.appendChild(feedbackBtn);
+            messageDiv.appendChild(feedbackButtonDiv);
+        }
 
         chatBody.appendChild(messageDiv);
         chatBody.scrollTop = chatBody.scrollHeight; // Auto-scroll to the latest message
@@ -89,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Display the AI's response or an error message
             if (data.success && data.response) {
-                addMessage(data.response, 'bot');
+                addMessage(data.response, 'bot', { query, response: data.response });
             } else {
                 addMessage(data.message || 'Sorry, something went wrong.', 'bot');
             }

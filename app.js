@@ -349,8 +349,23 @@ const privateMessageSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
   chatId: { type: String, required: true }
 });
+
+// Chatbot Feedback Schema for user training
+const chatbotFeedbackSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  userQuery: { type: String, required: true },
+  botResponse: { type: String, required: true },
+  userFeedback: { type: String, enum: ['helpful', 'incorrect', 'irrelevant', 'unclear'], required: true },
+  userCorrection: { type: String }, // What the correct answer should have been
+  correctBookIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Book' }], // Books user says are correct
+  confidence: { type: Number, default: 0 }, // ML confidence score (if using)
+  createdAt: { type: Date, default: Date.now },
+  resolved: { type: Boolean, default: false } // Whether admin resolved this feedback
+});
+
 const PrivateChatRequest = mongoose.model('PrivateChatRequest', privateChatRequestSchema);
 const PrivateMessage = mongoose.model('PrivateMessage', privateMessageSchema);
+
 // Models
 const User = mongoose.model('User', userSchema);
 const Book = mongoose.model('Book', bookSchema);
@@ -361,6 +376,7 @@ const Message = mongoose.model('Message', messageSchema);
 const News = mongoose.model('News', newsSchema);
 const Publication = mongoose.model('Publication', publicationSchema);
 const Comment = mongoose.model('Comment', commentSchema);
+const ChatbotFeedback = mongoose.model('ChatbotFeedback', chatbotFeedbackSchema);
 // Multer for publications (support multiple files: images and PDFs)
 const publicationUploadConfig = multer({
   storage: multer.memoryStorage(),
@@ -3014,138 +3030,920 @@ app.get('/applications', isAuthenticated, async (req, res) => {
   }
 });
 
+// ============================================================
+// SCHEMA-AWARE QUERY CLASSIFICATION & ANALYSIS
+// ============================================================
+
+// Schema field mapping for smart searching
+const SCHEMA_MAPPING = {
+  books: {
+    collection: 'books',
+    searchFields: ['title', 'author', 'description', 'tags'],
+    filterFields: { visibility: 'public' },
+    keywordFields: {
+      'title': 'title',
+      'author': 'author',
+      'by': 'author',
+      'writer': 'author',
+      'creator': 'uploadedBy',
+      'tags': 'tags',
+      'tag': 'tags'
+    }
+  },
+  users: {
+    collection: 'users',
+    searchFields: ['username', 'email', 'profession'],
+    filterFields: { profession: 'BookHive' },
+    keywordFields: {
+      'user': 'username',
+      'member': 'profession',
+      'admin': 'isAdmin',
+      'username': 'username'
+    }
+  },
+  news: {
+    collection: 'news',
+    searchFields: ['title', 'content'],
+    filterFields: {},
+    keywordFields: {
+      'news': 'title',
+      'article': 'content',
+      'update': 'content',
+      'title': 'title'
+    }
+  },
+  publications: {
+    collection: 'publications',
+    searchFields: ['content'],
+    filterFields: {},
+    keywordFields: {
+      'post': 'content',
+      'publication': 'content',
+      'article': 'content'
+    }
+  },
+  messages: {
+    collection: 'messages',
+    searchFields: ['content', 'category', 'tags', 'eventTitle', 'groupName'],
+    filterFields: { profession: 'BookHive' },
+    keywordFields: {
+      'discussion': 'isDiscussion',
+      'event': 'isEvent',
+      'group': 'isGroup',
+      'message': 'content',
+      'category': 'category'
+    }
+  }
+};
+
+// Keyword analysis for better query classification
+function analyzeQuery(query) {
+  const lowerQuery = query.toLowerCase().trim();
+  
+  const analysis = {
+    isAuthorQuery: /\b(who|author|writer|creator|poet|by|from)\b/i.test(lowerQuery),
+    isBookQuery: /\b(book|title|novel|publication|write|reading|read)\b/i.test(lowerQuery),
+    isTopicQuery: /\b(python|javascript|java|sql|mysql|database|web|cloud|data|machine|learning|ai|artificial|programming|code)\b/i.test(lowerQuery),
+    isNewsQuery: /\b(news|update|latest|recent|current|new|today|yesterday|week)\b/i.test(lowerQuery),
+    isEventQuery: /\b(event|conference|meeting|seminar|upcoming|scheduled|when)\b/i.test(lowerQuery),
+    isDiscussionQuery: /\b(discussion|forum|topic|thread|comment|debate|talk)\b/i.test(lowerQuery),
+    isGroupQuery: /\b(group|community|team|circle|club|organization)\b/i.test(lowerQuery),
+    isUserQuery: /\b(user|member|people|person|admin|administrator|who)\b/i.test(lowerQuery),
+    isPopularityQuery: /\b(popular|trending|most|favorite|liked|top|best|famous)\b/i.test(lowerQuery),
+    isDateQuery: /\b(recent|latest|today|yesterday|week|month|year|new|old)\b/i.test(lowerQuery)
+  };
+  
+  return analysis;
+}
+
+// Determine which collection(s) to search based on query analysis
+function determineCollections(analysis) {
+  const collections = [];
+  
+  if (analysis.isAuthorQuery && analysis.isBookQuery) collections.push('books');
+  else if (analysis.isAuthorQuery) collections.push('users');
+  
+  if (analysis.isTopicQuery && !analysis.isEventQuery) collections.push('books');
+  
+  if (analysis.isNewsQuery) collections.push('news');
+  
+  if (analysis.isEventQuery) collections.push('messages'); // Messages with isEvent=true
+  
+  if (analysis.isDiscussionQuery) collections.push('messages'); // Messages with isDiscussion=true
+  
+  if (analysis.isGroupQuery) collections.push('messages'); // Messages with isGroup=true
+  
+  if (analysis.isUserQuery) collections.push('users');
+  
+  if (analysis.isPopularityQuery && (analysis.isBookQuery || analysis.isTopicQuery)) {
+    collections.push('books');
+  }
+  
+  // If no specific collection identified, search books (most common)
+  if (collections.length === 0 && !analysis.isNewsQuery && !analysis.isEventQuery) {
+    collections.push('books');
+  }
+  
+  return [...new Set(collections)]; // Remove duplicates
+}
+
+// Helper function to classify query intent based on schema analysis
+function classifyQueryV2(query) {
+  const analysis = analyzeQuery(query);
+  const collections = determineCollections(analysis);
+  
+  console.log('Query Analysis:', { query, analysis, collections });
+  
+  // Determine primary query type
+  if (analysis.isAuthorQuery && analysis.isBookQuery) return 'author_books_query';
+  if (analysis.isAuthorQuery && !analysis.isBookQuery) return 'authors_query';
+  if (analysis.isEventQuery) return 'events_query';
+  if (analysis.isDiscussionQuery) return 'discussions_query';
+  if (analysis.isGroupQuery) return 'groups_query';
+  if (analysis.isNewsQuery) return 'news_query';
+  if (analysis.isUserQuery) return 'users_query';
+  if (analysis.isPopularityQuery && collections.includes('books')) return 'popular_books_query';
+  if (analysis.isTopicQuery || analysis.isBookQuery) return 'books_query';
+  
+  return 'general_conversation';
+}
+
+// Helper function to determine query intent and classify user question - ENHANCED
+function classifyQuery(query) {
+    const lowerQuery = query.toLowerCase().trim();
+    
+    // Check for author-related queries FIRST (more specific)
+    if (lowerQuery.match(/^(who|list|show|tell|get|find).*(author|writer|creator|poet|novelist)/i) ||
+        lowerQuery.match(/author|authors only/i)) {
+        return 'authors_query';
+    }
+    
+    // Check for news queries with higher priority
+    if (lowerQuery.match(/news|update|latest|recent|current|what.*new|announcement/i)) {
+        return 'news_query';
+    }
+    
+    // Check for publication/post queries
+    if (lowerQuery.match(/publication|post|article|blog|share|published/i)) {
+        return 'publication_query';
+    }
+    
+    // Check for specific AI use case queries
+    if (lowerQuery.match(/gemini|claude|ai assistant|use case/i)) {
+        return 'usecase_query';
+    }
+    
+    // Check for document-related queries (like joins, SQL, technical topics)
+    if (lowerQuery.match(/join|inner join|left join|right join|sql join|database join|query|sql|database|relation|table|schema|field|column|index/i)) {
+        return 'books_query';
+    }
+    
+    // Check for books-related queries (more specific patterns)
+    if (lowerQuery.match(/^(what|show|list|find|get|tell|any).*(book|title|novel|document)/i) ||
+        lowerQuery.match(/book.*available|available.*book|books?$/i) ||
+        lowerQuery.match(/^books?\s/i) ||
+        lowerQuery.match(/(python|javascript|java|sql|mysql|database|web|cloud|data|machine|learning|artificial|programming|code|development|framework|library)/i)) {
+        return 'books_query';
+    }
+    
+    // Default to general conversation
+    return 'general_conversation';
+}
+
+// Helper function to extract keywords from query
+function extractKeywords(query) {
+    // Remove common words that don't add search value
+    const stopWords = new Set(['the', 'and', 'or', 'is', 'are', 'am', 'be', 'been', 'being',
+        'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could',
+        'about', 'what', 'any', 'some', 'provide', 'provide', 'details', 'information',
+        'show', 'tell', 'get', 'find', 'list', 'available', 'you', 'me', 'my', 'your',
+        'this', 'that', 'these', 'those', 'a', 'an', 'can', 'want', 'like', 'help']);
+    
+    const allKeywords = query.toLowerCase().match(/\b\w{3,}\b/g) || [];
+    const keywords = allKeywords.filter(k => !stopWords.has(k));
+    
+    return [...new Set(keywords)]; // Remove duplicates
+}
+
+// COLLECTION-SPECIFIC SEARCH FUNCTIONS
+// ============================================================
+
+// Search users by name, username, or email
+async function searchUsersByKeywords(keywords) {
+  try {
+    const searchRegex = new RegExp(keywords.join('|'), 'i');
+    const users = await User.find({
+      $or: [
+        { username: searchRegex },
+        { email: searchRegex },
+        { profession: searchRegex }
+      ]
+    }).select('username email profession isAdmin').limit(20);
+    
+    return users;
+  } catch (err) {
+    console.error('Error searching users:', err);
+    return [];
+  }
+}
+
+// Search news by title or content
+async function searchNewsByKeywords(keywords) {
+  try {
+    const searchRegex = new RegExp(keywords.join('|'), 'i');
+    const news = await News.find({
+      $or: [
+        { title: searchRegex },
+        { content: searchRegex }
+      ]
+    }).sort({ createdAt: -1 }).limit(20);
+    
+    return news;
+  } catch (err) {
+    console.error('Error searching news:', err);
+    return [];
+  }
+}
+
+// Search messages with event details
+async function searchEventsByKeywords(keywords) {
+  try {
+    const searchRegex = new RegExp(keywords.join('|'), 'i');
+    const events = await Message.find({
+      isEvent: true,
+      $or: [
+        { eventTitle: searchRegex },
+        { eventType: searchRegex },
+        { content: searchRegex }
+      ]
+    }).sort({ eventStart: -1 }).limit(20);
+    
+    return events;
+  } catch (err) {
+    console.error('Error searching events:', err);
+    return [];
+  }
+}
+
+// Search discussions by category or content
+async function searchDiscussionsByKeywords(keywords) {
+  try {
+    const searchRegex = new RegExp(keywords.join('|'), 'i');
+    const discussions = await Message.find({
+      isDiscussion: true,
+      $or: [
+        { category: searchRegex },
+        { tags: searchRegex },
+        { content: searchRegex }
+      ]
+    }).sort({ createdAt: -1 }).limit(20);
+    
+    return discussions;
+  } catch (err) {
+    console.error('Error searching discussions:', err);
+    return [];
+  }
+}
+
+// Search groups by name or description
+async function searchGroupsByKeywords(keywords) {
+  try {
+    const searchRegex = new RegExp(keywords.join('|'), 'i');
+    const groups = await Message.find({
+      isGroup: true,
+      $or: [
+        { groupName: searchRegex },
+        { content: searchRegex }
+      ]
+    }).sort({ createdAt: -1 }).limit(20);
+    
+    return groups;
+  } catch (err) {
+    console.error('Error searching groups:', err);
+    return [];
+  }
+}
+
+// Search publications by content
+async function searchPublicationsByKeywords(keywords) {
+  try {
+    const searchRegex = new RegExp(keywords.join('|'), 'i');
+    const publications = await Publication.find({
+      content: searchRegex
+    }).sort({ createdAt: -1 }).limit(20);
+    
+    return publications;
+  } catch (err) {
+    console.error('Error searching publications:', err);
+    return [];
+  }
+}
+
+// Helper function to search books by keywords with fallback to all books
+async function searchBooksByKeywords(keywords, queryText, getAllIfEmpty = false) {
+    try {
+        console.log('Searching with keywords:', keywords);
+        
+        let books = [];
+        
+        // If keywords provided, search by metadata
+        if (keywords.length > 0) {
+            const searchRegex = new RegExp(keywords.join('|'), 'i');
+            
+            // Search in title, author, tags, description AND filter by public visibility
+            books = await Book.find({
+                visibility: 'public',
+                $or: [
+                    { title: searchRegex },
+                    { author: searchRegex },
+                    { tags: searchRegex },
+                    { description: searchRegex }
+                ]
+            })
+            .select('title author description tags uploadDate fileSize visibility')
+            .sort({ uploadDate: -1 })
+            .limit(15);
+            
+            console.log('Books found with keyword filters:', books.length);
+        }
+        
+        // If no books found, try getting all public books (Level 2 fallback)
+        if (books.length === 0) {
+            console.log('No keyword matches found, fetching all public books...');
+            books = await Book.find({ visibility: 'public' })
+                .select('title author description tags uploadDate fileSize visibility')
+                .sort({ uploadDate: -1 })
+                .limit(15);
+            
+            console.log('All public books found:', books.length);
+        }
+        
+        return books;
+    } catch (error) {
+        console.error('Search books error:', error);
+        return [];
+    }
+}
+
+// Helper function to search book content by PDF text - ENHANCED FOR DOCUMENT TOPICS
+async function searchBookContentByKeywords(keywords) {
+    try {
+        console.log('Searching PDF content with keywords:', keywords);
+        
+        if (keywords.length === 0) return [];
+        
+        const books = await Book.find({ visibility: 'public' })
+            .select('title author description tags fileData uploadDate')
+            .limit(30);
+        
+        const matchedBooks = [];
+        const keywordLower = keywords.map(k => k.toLowerCase());
+        
+        for (const book of books) {
+            try {
+                if (book.fileData) {
+                    const pdfData = await pdfParse(book.fileData);
+                    const textContent = pdfData.text.toLowerCase();
+                    
+                    // Check if keywords match in PDF content with occurrence count
+                    const keywordMatches = [];
+                    keywordLower.forEach(keyword => {
+                        if (textContent.includes(keyword)) {
+                            const regex = new RegExp(keyword, 'gi');
+                            const matches = textContent.match(regex);
+                            keywordMatches.push({
+                                keyword,
+                                count: matches ? matches.length : 0,
+                                found: true
+                            });
+                        }
+                    });
+                    
+                    if (keywordMatches.some(m => m.found)) {
+                        matchedBooks.push({
+                            title: book.title,
+                            author: book.author,
+                            description: book.description,
+                            tags: book.tags,
+                            uploadDate: book.uploadDate,
+                            matchedInContent: true,
+                            keywordMatches: keywordMatches.filter(m => m.found)
+                        });
+                    }
+                }
+            } catch (pdfError) {
+                console.error(`Error parsing PDF for ${book.title}:`, pdfError.message);
+            }
+        }
+        
+        console.log('PDF search matched books:', matchedBooks.length);
+        return matchedBooks;
+    } catch (error) {
+        console.error('Search book content error:', error);
+        return [];
+    }
+}
+
+// Helper function to get all authors
+async function getAllAuthors() {
+    try {
+        const authors = await Book.aggregate([
+            { $match: { visibility: 'public' } },
+            {
+                $group: {
+                    _id: '$author',
+                    bookCount: { $sum: 1 },
+                    books: { $push: '$title' }
+                }
+            },
+            { $sort: { bookCount: -1 } },
+            { $limit: 20 }
+        ]);
+        return authors;
+    } catch (error) {
+        console.error('Get authors error:', error);
+        return [];
+    }
+}
+
+// Helper function to get all public books
+async function getAllPublicBooks() {
+    try {
+        const books = await Book.find({ visibility: 'public' })
+            .select('title author description tags uploadDate fileSize')
+            .sort({ uploadDate: -1 })
+            .limit(20);
+        return books;
+    } catch (error) {
+        console.error('Get all books error:', error);
+        return [];
+    }
+}
+
+// Helper function to format books response
+function formatBooksResponse(books, isSearchResult = false) {
+    if (!books || books.length === 0) {
+        let message = isSearchResult 
+            ? 'No books found matching your search. Try asking for all available books or a specific topic.'
+            : 'No public books are currently available in the system.';
+        return message;
+    }
+    
+    let response = '**📚 Books Available in BookHive:**\n\n';
+    books.forEach((book, index) => {
+        response += `${index + 1}. **${book.title}** by *${book.author}*\n`;
+        if (book.description) {
+            response += `   📄 ${book.description.substring(0, 80)}...\n`;
+        }
+        if (book.tags && book.tags.length > 0) {
+            response += `   🏷️ Tags: ${book.tags.slice(0, 3).join(', ')}\n`;
+        }
+        response += '\n';
+    });
+    
+    response += '\n**💡 Would you like to know more?**\n';
+    response += '- Ask for **specific topics** (e.g., "books on AI")\n';
+    response += '- Ask for **authors** available in BookHive\n';
+    response += '- Ask to **see more books**';
+    
+    return response;
+}
+
+// Helper function to format authors response
+function formatAuthorsResponse(authors) {
+    if (!authors || authors.length === 0) {
+        return 'No authors available in the system yet. Be the first to upload a book!';
+    }
+    
+    let response = '**✍️ Current Authors Available in BookHive:**\n\n';
+    authors.forEach((author, index) => {
+        const authorName = author._id || 'Unknown';
+        response += `${index + 1}. **${authorName}** - ${author.bookCount} book(s)\n`;
+        if (author.books && author.books.length > 0) {
+            response += `   📚 ${author.books.slice(0, 2).join(', ')}\n`;
+        }
+    });
+    
+    response += '\n**Want to explore more?** Ask me about specific books or topics!';
+    return response;
+}
+
 app.post('/api/chatbot', isAuthenticated, async (req, res) => {
     try {
         const { query } = req.body;
         if (!query) return res.status(400).json({ success: false, message: 'Query is required.' });
 
-        // --- Step 1: Master Dispatcher - AI decides WHICH task to perform ---
-        const taskDispatchPrompt = `
-            You are a master AI agent dispatcher. Your job is to analyze the user's query and categorize it into one of three tasks.
-            Respond ONLY with a valid JSON object.
+        const queryType = classifyQuery(query);
+        const keywords = extractKeywords(query);
+        
+        console.log('=== CHATBOT DEBUG ===');
+        console.log('User Query:', query);
+        console.log('Query Type:', queryType);
+        console.log('Keywords:', keywords);
 
-            1.  **task: "database_query"**: If the user is asking for lists, counts, statistics, or relationships in the data. (e.g., "how many books?", "who has the most publications?", "list recent news").
-            2.  **task: "content_summary"**: If the user wants a summary, description, or details from the CONTENT of a SINGLE, SPECIFIC item. The user must name the item. (e.g., "summarize the book 'sampleBook'", "what is the news article 'New Update' about?").
-            3.  **task: "general_conversation"**: For greetings, simple questions, or if the intent is unclear.
-
-            The JSON output should be: {"task": "...", "subject": "..."}
-            - 'subject' should be the specific title of the item if the task is 'content_summary'. Otherwise, it can be null.
-
-            User Query: "${query}"
-        `;
-
-        const dispatchText = await callGeminiAPI(taskDispatchPrompt, "");
-        let dispatchPlan = { task: 'general_conversation', subject: null };
-        try {
-            const jsonMatch = dispatchText.match(/\{.*\}/s);
-            if (jsonMatch) dispatchPlan = JSON.parse(jsonMatch[0]);
-        } catch (e) {
-            console.error("Failed to parse dispatch plan:", dispatchText);
-        }
-        console.log('AI Dispatch Plan:', dispatchPlan);
-
-        // --- Step 2: Execute the chosen task ---
-        switch (dispatchPlan.task) {
-
-            // ==========================================================
-            //  TASK: CONTENT SUMMARY
-            // ==========================================================
-            case 'content_summary': {
-                const subject = dispatchPlan.subject;
-                if (!subject) {
-                    return res.json({ success: true, response: "Please specify the exact title of the book, news, or publication you'd like me to summarize." });
-                }
-
-                let itemContent = null;
-                let itemTitle = subject;
-
-                // Search for the item across collections
-                const book = await Book.findOne({ title: new RegExp(`^${subject}$`, 'i') }).select('fileData title');
-                if (book) {
-                    const pdfData = await pdfParse(book.fileData);
-                    itemContent = pdfData.text.slice(0, 20000);
-                } else {
-                    const news = await News.findOne({ title: new RegExp(`^${subject}$`, 'i') }).select('content title');
-                    if (news) {
-                        itemContent = news.content;
-                    } else {
-                        const publication = await Publication.findOne({ content: new RegExp(subject, 'i') }).select('content'); // Publications don't have titles, so search content
-                        if (publication) {
-                            itemContent = publication.content;
-                            itemTitle = `a publication starting with "${publication.content.slice(0, 30)}..."`;
+        // --- MULTI-COLLECTION SCHEMA-AWARE SEARCH ---
+        
+        // --- Step 1: Handle Books Query ---
+        if (queryType === 'books_query') {
+            console.log('Processing BOOKS_QUERY...');
+            
+            let books = await searchBooksByKeywords(keywords, query, false);
+            console.log('Books found with keyword search:', books.length);
+            
+            // LEVEL 2: If no metadata matches but we have keywords, search PDF content
+            if (books.length === 0 && keywords.length > 0) {
+                console.log('No metadata matches, searching PDF content for specific topics...');
+                books = await searchBookContentByKeywords(keywords);
+                console.log('Books found with PDF content search:', books.length);
+                
+                if (books.length > 0) {
+                    let response = '**📚 Books with "' + keywords.join(', ') + '" in Content:**\n\n';
+                    books.forEach((book, index) => {
+                        response += `${index + 1}. **${book.title}** by *${book.author}*\n`;
+                        if (book.description) {
+                            response += `   📄 ${book.description.substring(0, 80)}...\n`;
                         }
+                        if (book.keywordMatches && book.keywordMatches.length > 0) {
+                            response += `   ✓ Topics found: ${book.keywordMatches.map(m => m.keyword).join(', ')}\n`;
+                        }
+                        response += '\n';
+                    });
+                    response += '\n**💡 Found in document content!** These books contain your search terms.';
+                    return res.json({ success: true, response });
+                }
+            }
+            
+            // LEVEL 3: If still no results, get all public books
+            if (books.length === 0) {
+                console.log('No matches found, fetching all public books as fallback...');
+                books = await getAllPublicBooks();
+                console.log('All public books found:', books.length);
+            }
+            
+            const response = formatBooksResponse(books, keywords.length > 0);
+            return res.json({ success: true, response });
+        }
+
+        // --- Step 2: Handle Authors Query ---
+        if (queryType === 'authors_query') {
+            console.log('Processing AUTHORS_QUERY...');
+            const authors = await getAllAuthors();
+            console.log('Authors found:', authors.length);
+            const response = formatAuthorsResponse(authors);
+            return res.json({ success: true, response });
+        }
+
+        // --- Step 3: Handle Users/Members Query ---
+        if (queryType.includes('user') || query.toLowerCase().match(/\b(member|people|person|admin|user)\b/i)) {
+            console.log('Processing USERS_QUERY...');
+            const users = await searchUsersByKeywords(keywords);
+            console.log('Users found:', users.length);
+            
+            if (users.length > 0) {
+                let response = '**👥 Members in BookHive:**\n\n';
+                users.forEach((user, index) => {
+                    response += `${index + 1}. **${user.username}**\n`;
+                    if (user.email) response += `   📧 ${user.email}\n`;
+                    if (user.profession) response += `   💼 ${user.profession}\n`;
+                    if (user.isAdmin) response += `   ⭐ Administrator\n`;
+                    response += '\n';
+                });
+                return res.json({ success: true, response });
+            }
+        }
+
+        // --- Step 4: Handle Events Query ---
+        if (queryType.includes('event') || query.toLowerCase().match(/\b(event|conference|meeting|seminar|upcoming|scheduled)\b/i)) {
+            console.log('Processing EVENTS_QUERY...');
+            const events = await searchEventsByKeywords(keywords);
+            console.log('Events found:', events.length);
+            
+            if (events.length > 0) {
+                let response = '**📅 Upcoming Events:**\n\n';
+                events.forEach((event, index) => {
+                    response += `${index + 1}. **${event.eventTitle || 'Untitled'}**\n`;
+                    if (event.eventType) response += `   🎯 Type: ${event.eventType}\n`;
+                    if (event.eventStart) response += `   ⏰ Start: ${new Date(event.eventStart).toLocaleString()}\n`;
+                    response += '\n';
+                });
+                return res.json({ success: true, response });
+            }
+        }
+
+        // --- Step 5: Handle Discussions Query ---
+        if (queryType.includes('discussion') || query.toLowerCase().match(/\b(discussion|forum|topic|thread|debate)\b/i)) {
+            console.log('Processing DISCUSSIONS_QUERY...');
+            const discussions = await searchDiscussionsByKeywords(keywords);
+            console.log('Discussions found:', discussions.length);
+            
+            if (discussions.length > 0) {
+                let response = '**💬 Popular Discussions:**\n\n';
+                discussions.forEach((disc, index) => {
+                    response += `${index + 1}. **${disc.category || 'General Discussion'}**\n`;
+                    if (disc.tags && disc.tags.length > 0) response += `   🏷️ ${disc.tags.join(', ')}\n`;
+                    response += `   💭 ${disc.content.substring(0, 60)}...\n\n`;
+                });
+                return res.json({ success: true, response });
+            }
+        }
+
+        // --- Step 6: Handle Groups Query ---
+        if (queryType.includes('group') || query.toLowerCase().match(/\b(group|community|team|circle|organization)\b/i)) {
+            console.log('Processing GROUPS_QUERY...');
+            const groups = await searchGroupsByKeywords(keywords);
+            console.log('Groups found:', groups.length);
+            
+            if (groups.length > 0) {
+                let response = '**🤝 Active Groups:**\n\n';
+                groups.forEach((group, index) => {
+                    response += `${index + 1}. **${group.groupName || 'Unnamed Group'}**\n`;
+                    response += `   📝 ${group.content.substring(0, 60)}...\n\n`;
+                });
+                response += '\n**📢 Was this helpful?** Tell us if these results were what you needed!';
+                return res.json({ success: true, response });
+            }
+        }
+
+        // --- Step 6.5: Handle Publications Query ---
+        if (queryType.includes('publication') || query.toLowerCase().match(/\b(post|publication|article|blog|share)\b/i)) {
+            console.log('Processing PUBLICATIONS_QUERY...');
+            const publications = await searchPublicationsByKeywords(keywords);
+            console.log('Publications found:', publications.length);
+            
+            if (publications.length > 0) {
+                let response = '**📑 Recent Publications:**\n\n';
+                publications.forEach((pub, index) => {
+                    response += `${index + 1}. **Publication**\n`;
+                    response += `   📝 ${pub.content.substring(0, 80)}...\n`;
+                    response += `   👍 ${pub.likeCount || 0} likes\n\n`;
+                });
+                response += '\n**📢 Was this helpful?** Tell us what you think!';
+                return res.json({ success: true, response });
+            }
+        }
+
+        // --- Step 7: Handle AI Use Case Queries ---
+        if (queryType === 'usecase_query') {
+            console.log('Processing USECASE_QUERY...');
+            
+            const isGeminiQuery = query.toLowerCase().includes('gemini');
+            const isClaudeQuery = query.toLowerCase().includes('claude');
+            
+            let searchTerm = isGeminiQuery ? 'gemini' : (isClaudeQuery ? 'claude' : '');
+            console.log('AI Search Term:', searchTerm);
+            
+            if (searchTerm) {
+                let books = await searchBooksByKeywords([searchTerm], query, false);
+                console.log('Books found with AI keyword search:', books.length);
+                
+                if (books.length > 0) {
+                    const response = formatBooksResponse(books, true);
+                    return res.json({ success: true, response });
+                } else {
+                    console.log('No AI-specific matches, searching PDF content...');
+                    books = await searchBookContentByKeywords([searchTerm]);
+                    console.log('Books found with AI PDF search:', books.length);
+                    
+                    if (books.length > 0) {
+                        const response = formatBooksResponse(books, true);
+                        return res.json({ success: true, response });
+                    } else {
+                        console.log('No AI-specific books found, showing alternatives...');
+                        const allBooks = await getAllPublicBooks();
+                        
+                        let response = `**📖 No books specifically about "${searchTerm}" use cases found.**\n\n`;
+                        response += `But here are **other books available** that might interest you:\n\n`;
+                        
+                        if (allBooks.length > 0) {
+                            allBooks.slice(0, 5).forEach((book, index) => {
+                                response += `${index + 1}. **${book.title}** by *${book.author}*\n`;
+                            });
+                            response += `\n**💡 Suggestions:**\n- Ask for **all available books**\n- Ask about **authors** in BookHive\n- Try searching with **different keywords**`;
+                        } else {
+                            response += 'No books are currently available in the system.';
+                        }
+                        
+                        return res.json({ success: true, response });
                     }
                 }
-                
-                if (!itemContent) {
-                    return res.json({ success: true, response: `I'm sorry, I couldn't find any content for an item titled "${subject}".` });
-                }
-
-                const summaryPrompt = `Please provide a detailed summary of the following content from "${itemTitle}". The user's original question was: "${query}"\n\n--- CONTENT ---\n${itemContent}`;
-                const finalResponse = await callGeminiAPI(summaryPrompt, "");
-                return res.json({ success: true, response: finalResponse });
-            }
-
-            // ==========================================================
-            //  TASK: DATABASE QUERY
-            // ==========================================================
-            case 'database_query': {
-                const pipelineGenerationPrompt = `
-                    You are a MongoDB expert AI. Convert the user's question into a secure, read-only MongoDB aggregation pipeline.
-                    Rules: Use the provided schema ONLY. Your output MUST be a JSON object: {"collection": "...", "pipeline": [...]}.
-                    --- DATABASE SCHEMA ---
-                    ${DATABASE_SCHEMA_FOR_AI}
-                    ---
-                    User Question: "${query}"
-                `;
-                const pipelineText = await callGeminiAPI(pipelineGenerationPrompt, "");
-                let queryPlan = { collection: null, pipeline: [] };
-                try {
-                    const jsonMatch = pipelineText.match(/\{.*\}/s);
-                    if (jsonMatch) queryPlan = JSON.parse(jsonMatch[0]);
-                } catch (e) {
-                     return res.json({ success: true, response: "I had trouble formulating a database query. Please rephrase." });
-                }
-
-                console.log('AI Generated Query Plan:', queryPlan);
-                if (!queryPlan.collection || !isPipelineSafe(queryPlan.pipeline)) {
-                    return res.json({ success: true, response: "I'm sorry, I cannot process that specific query." });
-                }
-                
-                const targetCollection = mongoose.connection.collection(queryPlan.collection);
-                const toolResult = await targetCollection.aggregate(queryPlan.pipeline).toArray();
-
-                const finalResponsePrompt = `
-                    A user asked: "${query}"
-                    The database returned this data: ${JSON.stringify(toolResult)}
-                    Based on this data, formulate a friendly, natural language response.
-                `;
-                const finalResponse = await callGeminiAPI(finalResponsePrompt, "");
-                return res.json({ success: true, response: finalResponse });
-            }
-
-            // ==========================================================
-            //  TASK: GENERAL CONVERSATION
-            // ==========================================================
-            case 'general_conversation':
-            default: {
-                const genericPrompt = `The user said: "${query}". Provide a brief, friendly, and helpful response in your persona as the BookHive AI assistant. Guide them on what they can ask (e.g., ask for lists of books, news, or summaries of specific items).`;
-                const finalResponse = await callGeminiAPI(genericPrompt, "");
-                return res.json({ success: true, response: finalResponse });
             }
         }
+
+        // --- Step 8: Handle News Query - NOW SEARCHES WITH KEYWORDS ---
+        if (queryType === 'news_query') {
+            console.log('Processing NEWS_QUERY...');
+            try {
+                let news = [];
+                
+                // If keywords provided, search news
+                if (keywords.length > 0) {
+                    console.log('Searching news with keywords:', keywords);
+                    news = await searchNewsByKeywords(keywords);
+                    console.log('News found with keyword search:', news.length);
+                }
+                
+                // If no keyword matches, get latest news
+                if (news.length === 0) {
+                    console.log('No keyword matches, fetching latest news...');
+                    news = await News.find()
+                        .select('title content createdAt')
+                        .sort({ createdAt: -1 })
+                        .limit(5);
+                    console.log('Latest news found:', news.length);
+                }
+                
+                if (news.length === 0) {
+                    return res.json({ success: true, response: '📰 No news available at this time.' });
+                }
+                
+                let response = '**📰 Latest News' + (keywords.length > 0 ? ' about ' + keywords.join(', ') : '') + ':**\n\n';
+                news.forEach((item, index) => {
+                    response += `${index + 1}. **${item.title}**\n`;
+                    response += `   ${item.content.substring(0, 100)}...\n\n`;
+                });
+                
+                response += '\n**💡 Want to explore more?** Ask about books, authors, events, or discussions!';
+                response += '\n**📢 Was this helpful?** Let us know your feedback!';
+                return res.json({ success: true, response });
+            } catch (error) {
+                console.error('News query error:', error);
+                return res.json({ success: true, response: 'Unable to fetch news at this moment.' });
+            }
+        }
+
+        // --- Step 9: Handle General Conversation ---
+        console.log('Processing GENERAL_CONVERSATION...');
+        const generalResponses = [
+            "👋 **Hello! I'm the BookHive AI Assistant.**\n\nI can help you with:\n- 📚 **What books are available?** - I'll show you our book collection\n- ✍️ **Who are the authors?** - I'll list all authors in BookHive\n- 📰 **Recent news** - I'll share the latest updates\n- 👥 **Members & Users** - Find community members\n- 📅 **Events** - Upcoming events and conferences\n- 💬 **Discussions** - Active forum discussions\n\n**What would you like to know?**",
+            
+            "👋 **Hi there! Welcome to BookHive.**\n\nYou can ask me about:\n- 📚 Available books in our collection\n- ✍️ Authors and their work\n- 📰 Latest news and updates\n- 👥 Community members\n- 📅 Upcoming events\n- 💬 Discussions & forums\n\n**How can I assist you today?**",
+            
+            "👋 **I'm here to help!**\n\nYou can ask me:\n- 📚 What books do you have?\n- ✍️ Who are the current authors?\n- 📰 What's new in BookHive?\n- 👥 Members available?\n- 📅 Any upcoming events?\n- 💬 Active discussions?\n\n**What interests you?**"
+        ];
+        
+        const randomResponse = generalResponses[Math.floor(Math.random() * generalResponses.length)];
+        return res.json({ success: true, response: randomResponse });
+
     } catch (err) {
-        console.error('AI Chatbot error:', err);
-        res.status(500).json({ success: false, message: 'An error occurred while processing my thoughts.' });
+        console.error('=== CHATBOT ERROR ===', err);
+        res.status(500).json({ success: false, message: 'An error occurred while processing your request. Please try again later.' });
     }
 });
 
-cron.schedule('0 21 * * *', () => {
-  console.log('Running daily publication email task at 9PM IST');
-  sendDailyPublicationEmails();
-}, {
-  timezone: 'Asia/Kolkata'
+// ============================================================
+// CHATBOT FEEDBACK API - User Training System
+// ============================================================
+app.post('/api/chatbot/feedback', isAuthenticated, async (req, res) => {
+    try {
+        const { userQuery, botResponse, feedback, correction, correctBookIds } = req.body;
+        
+        if (!userQuery || !botResponse || !feedback) {
+            return res.status(400).json({ success: false, message: 'Missing required fields' });
+        }
+        
+        // Validate feedback type
+        const validFeedback = ['helpful', 'incorrect', 'irrelevant', 'unclear'];
+        if (!validFeedback.includes(feedback)) {
+            return res.status(400).json({ success: false, message: 'Invalid feedback type' });
+        }
+        
+        // Save feedback for training
+        const feedbackRecord = new ChatbotFeedback({
+            userId: req.user._id,
+            userQuery,
+            botResponse,
+            userFeedback: feedback,
+            userCorrection: correction || null,
+            correctBookIds: correctBookIds || []
+        });
+        
+        await feedbackRecord.save();
+        
+        console.log(`Chatbot Feedback Saved: ${feedback} from ${req.user.username}`);
+        console.log(`Query: "${userQuery}"`);
+        if (correction) console.log(`Correction: "${correction}"`);
+        
+        // Get pattern analysis for learning
+        const recentFeedback = await ChatbotFeedback.find()
+            .sort({ createdAt: -1 })
+            .limit(100);
+        
+        // Calculate accuracy
+        const helpfulCount = recentFeedback.filter(f => f.userFeedback === 'helpful').length;
+        const incorrectCount = recentFeedback.filter(f => f.userFeedback === 'incorrect').length;
+        const accuracy = (helpfulCount / recentFeedback.length * 100).toFixed(2);
+        
+        res.json({ 
+            success: true, 
+            message: 'Thank you for your feedback! It helps us improve.',
+            stats: {
+                accuracy: `${accuracy}%`,
+                totalFeedback: recentFeedback.length,
+                helpful: helpfulCount,
+                incorrect: incorrectCount
+            }
+        });
+        
+    } catch (err) {
+        console.error('Chatbot feedback error:', err);
+        res.status(500).json({ success: false, message: 'Error saving feedback' });
+    }
 });
+
+// ============================================================
+// ADMIN API - View Chatbot Feedback for Training
+// ============================================================
+app.get('/api/chatbot/feedback/stats', isAuthenticated, async (req, res) => {
+    try {
+        // Only admins can view stats
+        if (!req.user.isAdmin) {
+            return res.status(403).json({ success: false, message: 'Admin access required' });
+        }
+        
+        const allFeedback = await ChatbotFeedback.find()
+            .populate('userId', 'username')
+            .populate('correctBookIds', 'title author')
+            .sort({ createdAt: -1 })
+            .limit(100);
+        
+        // Calculate statistics
+        const stats = {
+            totalFeedback: allFeedback.length,
+            helpful: allFeedback.filter(f => f.userFeedback === 'helpful').length,
+            incorrect: allFeedback.filter(f => f.userFeedback === 'incorrect').length,
+            irrelevant: allFeedback.filter(f => f.userFeedback === 'irrelevant').length,
+            unclear: allFeedback.filter(f => f.userFeedback === 'unclear').length,
+            accuracy: ((allFeedback.filter(f => f.userFeedback === 'helpful').length / allFeedback.length) * 100).toFixed(2)
+        };
+        
+        // Common incorrect patterns
+        const incorrectPatterns = allFeedback
+            .filter(f => f.userFeedback === 'incorrect')
+            .map(f => ({ query: f.userQuery, correction: f.userCorrection }));
+        
+        res.json({
+            success: true,
+            stats,
+            recentFeedback: allFeedback.slice(0, 20),
+            incorrectPatterns: incorrectPatterns.slice(0, 10)
+        });
+        
+    } catch (err) {
+        console.error('Feedback stats error:', err);
+        res.status(500).json({ success: false, message: 'Error fetching feedback stats' });
+    }
+});
+
+// ============================================================
+// IMPROVE SEARCH - Based on User Feedback
+// ============================================================
+app.post('/api/chatbot/learn', isAuthenticated, async (req, res) => {
+    try {
+        // Only admins can trigger learning
+        if (!req.user.isAdmin) {
+            return res.status(403).json({ success: false, message: 'Admin access required' });
+        }
+        
+        // Get all incorrect feedback
+        const incorrectFeedback = await ChatbotFeedback.find({ userFeedback: 'incorrect' });
+        
+        // Analyze patterns
+        const queryPatterns = {};
+        incorrectFeedback.forEach(feedback => {
+            const keywords = feedback.userQuery.toLowerCase().split(/\s+/);
+            keywords.forEach(kw => {
+                if (kw.length > 3) {
+                    queryPatterns[kw] = (queryPatterns[kw] || 0) + 1;
+                }
+            });
+        });
+        
+        // Get most problematic queries
+        const sortedPatterns = Object.entries(queryPatterns)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+        
+        res.json({
+            success: true,
+            message: 'Learning analysis complete',
+            analysis: {
+                totalIncorrectResponses: incorrectFeedback.length,
+                problemKeywords: sortedPatterns,
+                recommendations: [
+                    'Review keywords causing incorrect results',
+                    'Consider adding more descriptive book tags',
+                    'Update query classification patterns',
+                    'Check book visibility settings (should be "public")'
+                ]
+            }
+        });
+        
+    } catch (err) {
+        console.error('Learning error:', err);
+        res.status(500).json({ success: false, message: 'Error during learning' });
+    }
+});
+
 
 
 server.listen(PORT, () => {

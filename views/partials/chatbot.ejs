@@ -21,3 +21,30 @@
         </div>
     </div>
 </div>
+
+<!-- Feedback Modal -->
+<div id="feedback-modal" class="feedback-modal" style="display: none;">
+    <div class="feedback-modal-content">
+        <span class="feedback-modal-close">&times;</span>
+        <h3>📢 Tell us what you think</h3>
+        <p>Was this response helpful?</p>
+        
+        <div class="feedback-buttons">
+            <button class="feedback-btn feedback-helpful" data-feedback="helpful">
+                <i class="fas fa-thumbs-up"></i> Helpful
+            </button>
+            <button class="feedback-btn feedback-incorrect" data-feedback="incorrect">
+                <i class="fas fa-times"></i> Incorrect
+            </button>
+            <button class="feedback-btn feedback-irrelevant" data-feedback="irrelevant">
+                <i class="fas fa-circle-notch"></i> Irrelevant
+            </button>
+            <button class="feedback-btn feedback-unclear" data-feedback="unclear">
+                <i class="fas fa-question"></i> Unclear
+            </button>
+        </div>
+        
+        <textarea id="feedback-text" placeholder="Additional comments (optional)..." maxlength="500"></textarea>
+        <button id="feedback-submit-btn" class="feedback-submit-btn">Submit Feedback</button>
+    </div>
+</div>
