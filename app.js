@@ -798,8 +798,6 @@ app.get('/auth/google/callback', (req, res, next) => {
 app.get('/', async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
-    const appDir = path.join(__dirname, 'applications');
-    const appFiles = await fs.readdir(appDir);
     const userApps = await Application.find({}).select('name _id iconPath');
     const applications = userApps.map(app => ({
       id: app._id.toString(),
