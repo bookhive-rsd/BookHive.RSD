@@ -546,16 +546,21 @@
       height: 100%;
       background: rgba(0, 0, 0, 0.5);
       z-index: 1000;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 20px 0;
     }
 
     .login-content, .signup-content {
       background: #eeeaea;
-      width: 60%;
+      width: 85%;
       max-width: 450px;
-      margin: 90px auto;
-      padding: 15px;
+      margin: 30px auto;
+      padding: 20px;
       border-radius: 13px;
       position: relative;
+      max-height: calc(100vh - 60px);
+      overflow-y: auto;
     }
 
     .close-login, .close-signup {
@@ -608,13 +613,19 @@
 
     /* Responsive Design */
     @media (max-width: 768px) {
+      .header {
+        position: relative;
+      }
+
       .header .container {
         flex-wrap: wrap;
         justify-content: space-between;
+        align-items: flex-start;
       }
 
       .logo-section {
         width: 100%;
+        padding-bottom: 10px;
       }
 
       .nav-menu {
@@ -622,12 +633,16 @@
         flex-direction: column;
         width: 100%;
         background: #fff;
-        position: absolute;
-        top: 80px;
+        position: fixed;
+        top: 65px;
         left: 0;
+        right: 0;
         padding: 1rem;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         gap: 0.5rem;
+        max-height: calc(100vh - 65px);
+        overflow-y: auto;
+        z-index: 999;
       }
 
       .nav-menu.active {
@@ -723,6 +738,85 @@
         top: 70px;
       }
     }
+    
+    /* Form styling for modals */
+    .login-content .form-group,
+    .signup-content .form-group {
+      margin-bottom: 15px;
+    }
+    
+    .login-content input,
+    .signup-content input {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 1rem;
+    }
+    
+    .login-content button,
+    .signup-content button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+    }
+    
+    .login-content h2,
+    .signup-content h2 {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    
+    .form-footer {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 0.95rem;
+    }
+    
+    .form-footer a {
+      color: #0a66c2;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    
+    .form-footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Extra small devices (mobile) */
+    @media (max-width: 480px) {
+      .login-content, .signup-content {
+        width: 95%;
+        margin: 20px auto;
+        padding: 15px;
+        max-height: calc(100vh - 40px);
+      }
+      
+      .close-login, .close-signup {
+        top: 5px;
+        right: 10px;
+        font-size: 1.3rem;
+      }
+      
+      .login-content h2,
+      .signup-content h2 {
+        font-size: 1.3rem;
+        margin-bottom: 15px;
+      }
+      
+      .login-content input,
+      .signup-content input {
+        font-size: 16px;
+        padding: 12px;
+      }
+      
+      .btn {
+        font-size: 0.95rem;
+        padding: 10px;
+      }
+    }
+    
     .welcome-text {
       color: yellow;
       font-size: 1.0rem;
