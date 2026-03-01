@@ -24,20 +24,114 @@ const emailTemplates = require('./config/email-templates');
 const { extractTextByType, generateThumbnail, getFileTypeFromMime, validateFileContent } = require('./config/document-processor');
 require('dotenv').config();
 
+// ============== STARTUP SECURITY CHECKS ==============
+const crypto = require('crypto');
+const fsSync = require('fs');
+
+// Auto-generate SESSION_SECRET if missing or using placeholder
+const PLACEHOLDER_SECRET = 'your-session-secret-key';
+if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === PLACEHOLDER_SECRET) {
+  const newSecret = crypto.randomBytes(64).toString('hex');
+  process.env.SESSION_SECRET = newSecret;
+  // Persist to .env so the same secret survives restarts
+  const envPath = require('path').join(__dirname, '.env');
+  try {
+    let envContent = fsSync.existsSync(envPath) ? fsSync.readFileSync(envPath, 'utf8') : '';
+    if (envContent.match(/^SESSION_SECRET=.*/m)) {
+      envContent = envContent.replace(/^SESSION_SECRET=.*/m, `SESSION_SECRET=${newSecret}`);
+    } else {
+      envContent += `\nSESSION_SECRET=${newSecret}\n`;
+    }
+    fsSync.writeFileSync(envPath, envContent, 'utf8');
+    console.log('✅ SESSION_SECRET auto-generated and saved to .env');
+  } catch (writeErr) {
+    // If we can't write (e.g. read-only filesystem in cloud), continue with in-memory secret
+    console.warn('⚠️  SESSION_SECRET auto-generated (in-memory only — could not write to .env):', writeErr.message);
+  }
+}
+
+// ADMIN_PASSWORD must be set manually — no safe auto-default for an admin account
+if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD.length < 8) {
+  console.error('FATAL: ADMIN_PASSWORD environment variable is not set or is too short (min 8 chars). Set it in .env.');
+  process.exit(1);
+}
+// ============== END STARTUP SECURITY CHECKS ==============
+
 // Environment variables
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 const MONGODB_URI = process.env.MONGODB_URI;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const SESSION_SECRET = process.env.SESSION_SECRET || 'your-secret-key';
+const SESSION_SECRET = process.env.SESSION_SECRET;
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 const PORT = process.env.PORT || 3000;
 const activeUsers = new Set();
+
+// ============== RATE LIMITER (in-memory, no extra package) ==============
+// Stores: Map<ip, { count, resetAt }>
+const rateLimitStore = new Map();
+function rateLimit(options) {
+  const { max, windowMs, message } = options;
+  return (req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const now = Date.now();
+    const entry = rateLimitStore.get(ip);
+    if (!entry || now > entry.resetAt) {
+      rateLimitStore.set(ip, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    entry.count++;
+    if (entry.count > max) {
+      res.set('Retry-After', Math.ceil((entry.resetAt - now) / 1000));
+      return res.status(429).json({ success: false, message });
+    }
+    next();
+  };
+}
+const loginLimiter = rateLimit({ max: 10, windowMs: 15 * 60 * 1000, message: 'Too many login attempts. Please try again in 15 minutes.' });
+const signupLimiter = rateLimit({ max: 5, windowMs: 60 * 60 * 1000, message: 'Too many accounts created. Please try again later.' });
+// Periodically purge expired entries to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitStore.entries()) {
+    if (now > entry.resetAt) rateLimitStore.delete(ip);
+  }
+}, 10 * 60 * 1000); // every 10 minutes
+// ============== END RATE LIMITER ==============
 app.set('trust proxy', 1);
 app.use(compression({ level: 6, threshold: 1024 })); // Compress responses > 1KB
+
+// ============== SECURITY HEADERS ==============
+app.disable('x-powered-by'); // Don't advertise Express
+app.use((req, res, next) => {
+  // Prevent MIME sniffing
+  res.set('X-Content-Type-Options', 'nosniff');
+  // Clickjacking protection
+  res.set('X-Frame-Options', 'SAMEORIGIN');
+  // Legacy XSS filter
+  res.set('X-XSS-Protection', '1; mode=block');
+  // Referrer policy
+  res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Permissions policy
+  res.set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  // Content Security Policy
+  res.set('Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://kit.fontawesome.com https://cdnjs.cloudflare.com https://cdn.quilljs.com; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.quilljs.com; " +
+    "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
+    "img-src 'self' data: https://upload.wikimedia.org blob:; " +
+    "connect-src 'self'; " +
+    "frame-src 'self'; " +
+    "object-src 'none'; " +
+    "base-uri 'self'"
+  );
+  next();
+});
+// ============== END SECURITY HEADERS ==============
 app.use((req, res, next) => {
   if (process.env.NODE_ENV === 'production' && req.get('X-Forwarded-Proto') !== 'https') {
     return res.redirect(301, `https://${req.get('host')}${req.url}`);
@@ -76,23 +170,23 @@ app.use(session({
   saveUninitialized: false,
   store: MongoStore.create({ mongoUrl: MONGODB_URI }),
   cookie: {
-      maxAge: SESSION_TIMEOUT,
-      secure: process.env.NODE_ENV === 'production',
-      httpOnly: true,
-      sameSite: 'lax'
-    }
+    maxAge: SESSION_TIMEOUT,
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax'
+  }
 }));
 
 // Helper function to verify if an email's domain has MX records
 async function verifyEmailDomain(email) {
-    try {
-        const domain = email.split('@')[1];
-        const records = await dns.promises.resolveMx(domain);
-        return records && records.length > 0;
-    } catch (error) {
-        console.error('DNS lookup failed for:', email, error);
-        return false;
-    }
+  try {
+    const domain = email.split('@')[1];
+    const records = await dns.promises.resolveMx(domain);
+    return records && records.length > 0;
+  } catch (error) {
+    console.error('DNS lookup failed for:', email, error);
+    return false;
+  }
 }
 
 // Helper function to call Gemini API
@@ -128,7 +222,7 @@ async function callGeminiAPI(prompt, textContent) {
 async function validatePdfContent(pdfBuffer) {
   try {
     // Logic removed to prevent external API failures from blocking user uploads
-    return true; 
+    return true;
   } catch (error) {
     console.error('PDF validation error:', error);
     return true; // Fallback to true so the app remains functional
@@ -137,34 +231,34 @@ async function validatePdfContent(pdfBuffer) {
 
 // Security function to validate the AI-generated MongoDB pipeline
 function isPipelineSafe(pipeline) {
-    if (!Array.isArray(pipeline)) return false;
+  if (!Array.isArray(pipeline)) return false;
 
-    const ALLOWED_STAGES = ['$match', '$group', '$sort', '$limit', '$project', '$lookup', '$count'];
-    const FORBIDDEN_FIELDS = ['password', 'email', 'googleId', 'fileData', 'accessList'];
-    const FORBIDDEN_OPERATORS = ['$where'];
+  const ALLOWED_STAGES = ['$match', '$group', '$sort', '$limit', '$project', '$lookup', '$count'];
+  const FORBIDDEN_FIELDS = ['password', 'email', 'googleId', 'fileData', 'accessList'];
+  const FORBIDDEN_OPERATORS = ['$where'];
 
-    for (const stage of pipeline) {
-        const stageName = Object.keys(stage)[0];
-        if (!ALLOWED_STAGES.includes(stageName)) {
-            console.error(`Validation failed: Disallowed stage found: ${stageName}`);
-            return false;
-        }
-
-        const stageContent = JSON.stringify(stage);
-        for (const field of FORBIDDEN_FIELDS) {
-            if (stageContent.includes(`"${field}"`)) {
-                console.error(`Validation failed: Forbidden field access attempted: ${field}`);
-                return false;
-            }
-        }
-        for (const op of FORBIDDEN_OPERATORS) {
-             if (stageContent.includes(`"${op}"`)) {
-                console.error(`Validation failed: Forbidden operator used: ${op}`);
-                return false;
-            }
-        }
+  for (const stage of pipeline) {
+    const stageName = Object.keys(stage)[0];
+    if (!ALLOWED_STAGES.includes(stageName)) {
+      console.error(`Validation failed: Disallowed stage found: ${stageName}`);
+      return false;
     }
-    return true; // All checks passed
+
+    const stageContent = JSON.stringify(stage);
+    for (const field of FORBIDDEN_FIELDS) {
+      if (stageContent.includes(`"${field}"`)) {
+        console.error(`Validation failed: Forbidden field access attempted: ${field}`);
+        return false;
+      }
+    }
+    for (const op of FORBIDDEN_OPERATORS) {
+      if (stageContent.includes(`"${op}"`)) {
+        console.error(`Validation failed: Forbidden operator used: ${op}`);
+        return false;
+      }
+    }
+  }
+  return true; // All checks passed
 }
 // Passport setup
 app.use(passport.initialize());
@@ -208,9 +302,9 @@ passport.use(new GoogleStrategy({
         html: emailTemplate.html,
         text: `Welcome to BookHive, ${user.username}!\n\nThank you for joining our community. Explore, upload, and share your favorite books with BookHive.\n\nGet started by visiting: ${baseUrl}/bookhive\n\nBest regards,\nBookHive Team`,
         headers: {
-            'X-Priority': '3',
-            'X-MSMail-Priority': 'Normal',
-            'Importance': 'Normal'
+          'X-Priority': '3',
+          'X-MSMail-Priority': 'Normal',
+          'Importance': 'Normal'
         }
       };
       await transporter.sendMail(mailOptions);
@@ -409,6 +503,47 @@ const Publication = mongoose.model('Publication', publicationSchema);
 const Comment = mongoose.model('Comment', commentSchema);
 const ChatbotFeedback = mongoose.model('ChatbotFeedback', chatbotFeedbackSchema);
 const Notification = mongoose.model('Notification', notificationSchema);
+
+// ============== DATABASE INDEXES (FIX: was in dead file, now applied) ==============
+// User indexes - critical for login/lookup
+userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ username: 1 }, { unique: true });
+userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
+userSchema.index({ createdAt: -1 });
+// Book indexes - critical for listing/search performance
+bookSchema.index({ uploadedBy: 1 });
+bookSchema.index({ visibility: 1 });
+bookSchema.index({ uploadDate: -1 });
+bookSchema.index({ uploadedBy: 1, visibility: 1 });
+bookSchema.index({ tags: 1 });
+bookSchema.index({ title: 'text', author: 'text', extractedText: 'text' }); // Full-text search including content
+bookSchema.index({ pinCount: -1 });
+// Request indexes
+requestSchema.index({ requestedBy: 1, status: 1 });
+requestSchema.index({ bookOwner: 1, status: 1 });
+// Note index
+noteSchema.index({ user: 1 });
+// Message indexes
+messageSchema.index({ profession: 1, timestamp: -1 });
+messageSchema.index({ isDiscussion: 1, profession: 1 });
+messageSchema.index({ isEvent: 1, profession: 1 });
+messageSchema.index({ isGroup: 1, profession: 1 });
+messageSchema.index({ groupId: 1, isGroupMessage: 1 });
+messageSchema.index({ responseToId: 1, isResponse: 1 });
+// News index
+newsSchema.index({ createdAt: -1 });
+// Publication index
+publicationSchema.index({ createdAt: -1 });
+// Comment index
+commentSchema.index({ publication: 1, createdAt: 1 });
+// Notification index
+notificationSchema.index({ user: 1, isRead: 1, createdAt: -1 });
+// PrivateChatRequest indexes
+privateChatRequestSchema.index({ requester: 1, status: 1 });
+privateChatRequestSchema.index({ recipient: 1, status: 1 });
+// PrivateMessage index
+privateMessageSchema.index({ chatId: 1, timestamp: -1 });
+// ============== END DATABASE INDEXES ==============
 // Multer for publications (support multiple files: images and PDFs)
 const publicationUploadConfig = multer({
   storage: multer.memoryStorage(),
@@ -459,12 +594,18 @@ const formUpload = multer({
     cb(null, false);
   }
 }).none();
-// Fetch user and note middleware
+// Fetch user and note middleware - FIX: skip for static-file serving routes to avoid unnecessary DB hits
+const SKIP_USER_FETCH_PATHS = /^\/(file|thumbnail|news-image|pub-file|publication-file|book\/[^/]+\/cover|app-icon|favicon\.ico)/;
 const fetchUserAndNote = async (req, res, next) => {
-  if (req.session.userId) {
+  if (req.session.userId && !SKIP_USER_FETCH_PATHS.test(req.path)) {
     try {
-      req.user = await User.findById(req.session.userId);
-      req.note = await Note.findOne({ user: req.session.userId });
+      // Run both queries in parallel instead of sequentially
+      const [user, note] = await Promise.all([
+        User.findById(req.session.userId),
+        Note.findOne({ user: req.session.userId })
+      ]);
+      req.user = user;
+      req.note = note;
     } catch (err) {
       console.error('Error fetching user or note:', err);
       req.user = null;
@@ -480,7 +621,7 @@ mongoose.connect(MONGODB_URI, {
   useUnifiedTopology: true
 }).then(async () => {
   console.log('Connected to MongoDB');
-  
+
   // Initialize GridFS bucket for file storage
   try {
     const gfs = new GridFSBucket(mongoose.connection.db, {
@@ -491,11 +632,13 @@ mongoose.connect(MONGODB_URI, {
   } catch (gridFsErr) {
     console.warn('Warning: GridFS bucket initialization failed:', gridFsErr.message);
   }
-  
+
   try {
     const adminExists = await User.findOne({ username: 'admin' });
     if (!adminExists) {
-      const hashedPassword = await bcrypt.hash('admin123', 10);
+      // Use strong password from environment — never hardcoded
+      const adminPassword = process.env.ADMIN_PASSWORD;
+      const hashedPassword = await bcrypt.hash(adminPassword, 12);
       const adminUser = new User({
         username: 'admin',
         email: 'admin@bookhive.com',
@@ -504,7 +647,7 @@ mongoose.connect(MONGODB_URI, {
         isAdmin: true
       });
       await adminUser.save();
-      console.log('Admin user created');
+      console.log('Admin user created successfully');
       const adminNote = new Note({
         user: adminUser._id,
         content: 'Admin notes'
@@ -602,114 +745,173 @@ async function sendLoginAlert(user, ipAddress, userAgent) {
 }
 
 // Enhanced news broadcast with real-time notification
+// FIX: Use insertMany for bulk notification creation + single Socket.io emit instead of sequential per-user loop
 async function broadcastNewsNotification(newsId, newsTitle, newsContent) {
   try {
-    const users = await User.find({ 'notificationPreferences.newsUpdates': true });
+    const users = await User.find(
+      { 'notificationPreferences.newsUpdates': true },
+      { _id: 1, email: 1, username: 1, 'notificationPreferences.emailNotifications': 1, 'notificationPreferences.inAppNotifications': 1 }
+    ).lean();
     const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 
-    for (const user of users) {
-      const emailTemplate = emailTemplates.newsUpdate(
-        user.username,
-        newsTitle,
-        newsContent.substring(0, 200) + '...',
-        `${baseUrl}/news`
-      );
-
-      await sendNotification(
-        user._id,
-        'news',
-        '📰 News Update',
-        newsTitle,
-        emailTemplate,
-        '/news',
-        newsId
-      );
-
-      // Emit real-time news alert
-      io.to(user._id.toString()).emit('newsAlert', {
-        title: newsTitle,
-        newsId
-      });
+    // Bulk create in-app notifications
+    const notifications = users
+      .filter(u => u.notificationPreferences.inAppNotifications)
+      .map(u => ({
+        user: u._id,
+        type: 'news',
+        title: '📰 News Update',
+        message: newsTitle,
+        link: '/news',
+        relatedId: newsId
+      }));
+    if (notifications.length > 0) {
+      await Notification.insertMany(notifications, { ordered: false }).catch(e => console.error('Bulk notification insert error:', e));
     }
+
+    // Single broadcast to all connected sockets
+    io.emit('newsAlert', { title: newsTitle, newsId });
+
+    // Send emails asynchronously (fire-and-forget per-user email is unavoidable but don't block)
+    const emailUsers = users.filter(u => u.notificationPreferences.emailNotifications);
+    setImmediate(async () => {
+      for (const user of emailUsers) {
+        try {
+          const emailTemplate = emailTemplates.newsUpdate(
+            user.username,
+            newsTitle,
+            newsContent.substring(0, 200) + '...',
+            `${baseUrl}/news`
+          );
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: user.email,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html
+          });
+        } catch (emailErr) {
+          console.error(`News email error for ${user.email}:`, emailErr.message);
+        }
+      }
+    });
   } catch (err) {
     console.error('Error sending news notification:', err);
   }
 }
 
 // Enhanced publication broadcast with real-time notification
+// FIX: Bulk insert notifications + single broadcast
 async function broadcastPublicationNotification(publicationId, authorId, authorName, publicationPreview) {
   try {
-    const users = await User.find({ 
-      'notificationPreferences.publicationUpdates': true,
-      _id: { $ne: authorId }  // Exclude the author who published it
-    });
+    const users = await User.find(
+      { 'notificationPreferences.publicationUpdates': true, _id: { $ne: authorId } },
+      { _id: 1, email: 1, username: 1, 'notificationPreferences.emailNotifications': 1, 'notificationPreferences.inAppNotifications': 1 }
+    ).lean();
     const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 
-    for (const user of users) {
-      const emailTemplate = emailTemplates.publicationUpdate(
-        user.username,
-        authorName,
-        publicationPreview.substring(0, 200) + '...',
-        `${baseUrl}/publications`
-      );
-
-      await sendNotification(
-        user._id,
-        'publication',
-        '📚 New Publication',
-        `New publication by ${authorName}`,
-        emailTemplate,
-        '/publications',
-        publicationId
-      );
-
-      // Emit real-time publication alert
-      io.to(user._id.toString()).emit('publicationAlert', {
-        title: publicationPreview.substring(0, 100),
-        author: authorName,
-        publicationId
-      });
+    // Bulk create in-app notifications
+    const notifications = users
+      .filter(u => u.notificationPreferences.inAppNotifications)
+      .map(u => ({
+        user: u._id,
+        type: 'publication',
+        title: '📚 New Publication',
+        message: `New publication by ${authorName}`,
+        link: '/publications',
+        relatedId: publicationId
+      }));
+    if (notifications.length > 0) {
+      await Notification.insertMany(notifications, { ordered: false }).catch(e => console.error('Bulk pub notification error:', e));
     }
+
+    // Single broadcast
+    io.emit('publicationAlert', {
+      title: publicationPreview.substring(0, 100),
+      author: authorName,
+      publicationId
+    });
+
+    // Send emails asynchronously
+    const emailUsers = users.filter(u => u.notificationPreferences.emailNotifications);
+    setImmediate(async () => {
+      for (const user of emailUsers) {
+        try {
+          const emailTemplate = emailTemplates.publicationUpdate(
+            user.username, authorName,
+            publicationPreview.substring(0, 200) + '...',
+            `${baseUrl}/publications`
+          );
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: user.email,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html
+          });
+        } catch (emailErr) {
+          console.error(`Publication email error for ${user.email}:`, emailErr.message);
+        }
+      }
+    });
   } catch (err) {
     console.error('Error sending publication notification:', err);
   }
 }
 
-// NEW: Book update broadcast notification - MOST IMPORTANT
+// NEW: Book update broadcast notification
+// FIX: Bulk insert notifications + single broadcast
 async function broadcastBookUpdateNotification(publicationId, bookTitle, authorName, updateSummary) {
   try {
-    const users = await User.find({ 'notificationPreferences.bookUpdates': true });
+    const users = await User.find(
+      { 'notificationPreferences.bookUpdates': true },
+      { _id: 1, email: 1, username: 1, 'notificationPreferences.emailNotifications': 1, 'notificationPreferences.inAppNotifications': 1 }
+    ).lean();
     const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
     const bookLink = `${baseUrl}/publications/${publicationId}`;
 
-    for (const user of users) {
-      const emailTemplate = emailTemplates.bookUpdate(
-        user.username,
-        bookTitle,
-        authorName,
-        updateSummary.substring(0, 300),
-        bookLink
-      );
-
-      await sendNotification(
-        user._id,
-        'book-update',
-        '📖 Book Updated',
-        `"${bookTitle}" by ${authorName} has been updated!`,
-        emailTemplate,
-        bookLink,
-        publicationId
-      );
-
-      // Emit real-time book update alert - with high priority
-      io.to(user._id.toString()).emit('bookUpdate', {
-        bookTitle,
-        author: authorName,
-        updateSummary: updateSummary.substring(0, 200),
-        publicationId,
-        timestamp: new Date()
-      });
+    // Bulk in-app notifications
+    const notifications = users
+      .filter(u => u.notificationPreferences.inAppNotifications)
+      .map(u => ({
+        user: u._id,
+        type: 'book-update',
+        title: '📖 Book Updated',
+        message: `"${bookTitle}" by ${authorName} has been updated!`,
+        link: bookLink,
+        relatedId: publicationId
+      }));
+    if (notifications.length > 0) {
+      await Notification.insertMany(notifications, { ordered: false }).catch(e => console.error('Bulk book-update notification error:', e));
     }
+
+    // Single broadcast
+    io.emit('bookUpdate', {
+      bookTitle,
+      author: authorName,
+      updateSummary: updateSummary.substring(0, 200),
+      publicationId,
+      timestamp: new Date()
+    });
+
+    // Send emails asynchronously
+    const emailUsers = users.filter(u => u.notificationPreferences.emailNotifications);
+    setImmediate(async () => {
+      for (const user of emailUsers) {
+        try {
+          const emailTemplate = emailTemplates.bookUpdate(
+            user.username, bookTitle, authorName,
+            updateSummary.substring(0, 300), bookLink
+          );
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: user.email,
+            subject: emailTemplate.subject,
+            html: emailTemplate.html
+          });
+        } catch (emailErr) {
+          console.error(`Book update email error for ${user.email}:`, emailErr.message);
+        }
+      }
+    });
   } catch (err) {
     console.error('Error sending book update notification:', err);
   }
@@ -727,7 +929,7 @@ const transporter = nodemailer.createTransport({
   // Added options to improve connection handling and potentially deliverability
   pool: true,
   maxConnections: 1,
-  rateLimit: 1, 
+  rateLimit: 1,
   maxMessages: 20
 });
 // Multer for file uploads (PDF, DOCX, Images)
@@ -939,9 +1141,9 @@ io.on('connection', (socket) => {
         `,
         text: `New Private Chat Request\n\nUser ${requester.username} has requested to start a private chat with you.\n\nPlease visit BookHive Community to accept or decline this request: https://bookhive-rsd.onrender.com/community\n\nBest regards,\nBookHive Team`,
         headers: {
-            'X-Priority': '3',
-            'X-MSMail-Priority': 'Normal',
-            'Importance': 'Normal'
+          'X-Priority': '3',
+          'X-MSMail-Priority': 'Normal',
+          'Importance': 'Normal'
         }
       };
       await transporter.sendMail(mailOptions);
@@ -1111,30 +1313,29 @@ app.get('/bookhive', isAuthenticated, async (req, res) => {
         note: req.note ? req.note.content : ''
       });
     }
+    // FIX: Run all 4 queries in parallel, including countDocuments
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const newBooks = await Book.find({
-      uploadDate: { $gte: today },
-      visibility: { $in: ['public', 'restricted'] },
-      uploadedBy: { $ne: req.session.userId }
-    }).populate('uploadedBy', 'username').lean();
-    const myBooks = await Book.find({
-      uploadedBy: req.session.userId
-    }).lean();
-    const pendingRequests = await Request.find({
-      requestedBy: user._id,
-      status: 'pending'
-    }).select('book').lean();
+    const [newBooks, myBooks, pendingRequests, totalUsers] = await Promise.all([
+      Book.find({
+        uploadDate: { $gte: today },
+        visibility: { $in: ['public', 'restricted'] },
+        uploadedBy: { $ne: req.session.userId }
+      }).select('-fileData -thumbnail -coverImage -extractedText').populate('uploadedBy', 'username').lean(),
+      Book.find({ uploadedBy: req.session.userId }).select('-fileData -thumbnail -coverImage -extractedText').lean(),
+      Request.find({ requestedBy: user._id, status: 'pending' }).select('book').lean(),
+      User.countDocuments()
+    ]);
     const pendingBookIds = pendingRequests ? pendingRequests.map(req => req.book.toString()) : [];
     const booksWithStatus = newBooks.map(book => {
       const hasAccess = (
         Array.isArray(book.accessList) &&
         book.accessList.some(id => id.toString() === user._id.toString())
       ) || (
-        book.uploadedBy &&
-        book.uploadedBy._id &&
-        book.uploadedBy._id.toString() === user._id.toString()
-      );
+          book.uploadedBy &&
+          book.uploadedBy._id &&
+          book.uploadedBy._id.toString() === user._id.toString()
+        );
       return {
         ...book,
         hasPendingRequest: pendingBookIds.includes(book._id.toString()),
@@ -1147,7 +1348,7 @@ app.get('/bookhive', isAuthenticated, async (req, res) => {
       myBooks,
       pendingBookIds: pendingBookIds || [],
       note: req.note ? req.note.content : '',
-      totalUsers: await User.countDocuments(),
+      totalUsers,
       activeUsers: activeUsers.size,
       currentUser: user._id.toString()
     });
@@ -1163,29 +1364,29 @@ app.get('/bookhive', isAuthenticated, async (req, res) => {
 app.get('/signup', (req, res) => {
   res.render('signup', { user: req.user, note: req.note ? req.note.content : '', error: null });
 });
-app.post('/signup', async (req, res) => {
+app.post('/signup', signupLimiter, async (req, res) => {
   try {
     const { username, email, password, profession } = req.body;
     if (!username || !email || !password || !profession) {
       return res.status(400).render('signup', { error: 'All fields are required', user: req.user, note: req.note ? req.note.content : '' });
     }
-    
+
     // Server-side email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-        return res.status(400).render('signup', { error: 'Please enter a valid email address.', user: req.user, note: req.note ? req.note.content : '' });
+      return res.status(400).render('signup', { error: 'Please enter a valid email address.', user: req.user, note: req.note ? req.note.content : '' });
     }
 
     // Server-side password strength validation
     const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(password)) {
-        return res.status(400).render('signup', { error: 'Password must be at least 8 characters long and contain at least one uppercase letter and one number.', user: req.user, note: req.note ? req.note.content : '' });
+      return res.status(400).render('signup', { error: 'Password must be at least 8 characters long and contain at least one uppercase letter and one number.', user: req.user, note: req.note ? req.note.content : '' });
     }
 
     // Check if email domain is valid
     const isDomainValid = await verifyEmailDomain(email);
     if (!isDomainValid) {
-        return res.status(400).render('signup', { error: 'The email provider does not exist or could not be reached. Please use a different email.', user: req.user, note: req.note ? req.note.content : '' });
+      return res.status(400).render('signup', { error: 'The email provider does not exist or could not be reached. Please use a different email.', user: req.user, note: req.note ? req.note.content : '' });
     }
 
 
@@ -1219,9 +1420,9 @@ app.post('/signup', async (req, res) => {
         html: emailTemplate.html,
         text: `Welcome to BookHive, ${newUser.username}!\n\nThank you for joining our community. Explore, upload, and share your favorite books with BookHive.\n\nGet started by visiting: ${baseUrl}/bookhive\n\nBest regards,\nBookHive Team`,
         headers: {
-            'X-Priority': '3',
-            'X-MSMail-Priority': 'Normal',
-            'Importance': 'Normal'
+          'X-Priority': '3',
+          'X-MSMail-Priority': 'Normal',
+          'Importance': 'Normal'
         }
       };
       await transporter.sendMail(mailOptions);
@@ -1238,7 +1439,7 @@ app.post('/signup', async (req, res) => {
 app.get('/login', (req, res) => {
   res.render('login', { error: null, user: req.user, note: req.note ? req.note.content : '' });
 });
-app.post('/login', async (req, res) => {
+app.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -1252,19 +1453,18 @@ app.post('/login', async (req, res) => {
     if (!isMatch) {
       return res.status(400).render('login', { error: 'Invalid credentials', user: req.user, note: req.note ? req.note.content : '' });
     }
-    
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
-    
+
+    // FIX: Non-blocking lastLogin update - no need to load/save full document
+    User.updateOne({ _id: user._id }, { $set: { lastLogin: new Date() } }).catch(e => console.error('lastLogin update error:', e));
+
     req.session.userId = user._id;
     req.session.lastActivity = Date.now();
-    
-    // Send login notification
+
+    // FIX: Fire-and-forget login alert so redirect is instant
     const ipAddress = req.ip || req.connection.remoteAddress || 'Unknown';
     const userAgent = req.get('user-agent') || 'Unknown';
-    await sendLoginAlert(user, ipAddress, userAgent);
-    
+    sendLoginAlert(user, ipAddress, userAgent).catch(err => console.error('Login alert error:', err));
+
     if (user.isAdmin) {
       res.redirect('/admin');
     } else {
@@ -1295,14 +1495,14 @@ app.get('/notifications', isAuthenticated, async (req, res) => {
     if (user.isAdmin) {
       return res.redirect('/admin');
     }
-    
+
     const notifications = await Notification.find({ user: user._id })
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();
-    
+
     const unreadCount = notifications.filter(n => !n.isRead).length;
-    
+
     res.render('notifications', {
       user,
       notifications,
@@ -1312,10 +1512,10 @@ app.get('/notifications', isAuthenticated, async (req, res) => {
     });
   } catch (err) {
     console.error('Notifications page error:', err);
-    res.status(500).render('error', { 
-      message: 'Failed to load notifications', 
-      user: req.user, 
-      note: req.note ? req.note.content : '' 
+    res.status(500).render('error', {
+      message: 'Failed to load notifications',
+      user: req.user,
+      note: req.note ? req.note.content : ''
     });
   }
 });
@@ -1324,12 +1524,16 @@ app.get('/notifications', isAuthenticated, async (req, res) => {
 app.post('/notifications/mark-read/:notificationId', isAuthenticated, async (req, res) => {
   try {
     const { notificationId } = req.params;
-    const notification = await Notification.findByIdAndUpdate(
-      notificationId,
+    // Scope to current user to prevent IDOR - users can only mark their own notifications
+    const notification = await Notification.findOneAndUpdate(
+      { _id: notificationId, user: req.user._id },
       { isRead: true },
       { new: true }
     );
-    
+    if (!notification) {
+      return res.status(404).json({ success: false, message: 'Notification not found' });
+    }
+
     res.json({ success: true, notification });
   } catch (err) {
     console.error('Mark notification read error:', err);
@@ -1344,7 +1548,7 @@ app.post('/notifications/mark-all-read', isAuthenticated, async (req, res) => {
       { user: req.user._id, isRead: false },
       { isRead: true }
     );
-    
+
     res.json({ success: true, message: 'All notifications marked as read' });
   } catch (err) {
     console.error('Mark all notifications read error:', err);
@@ -1356,8 +1560,12 @@ app.post('/notifications/mark-all-read', isAuthenticated, async (req, res) => {
 app.delete('/notifications/:notificationId', isAuthenticated, async (req, res) => {
   try {
     const { notificationId } = req.params;
-    await Notification.findByIdAndDelete(notificationId);
-    
+    // Scope to current user to prevent IDOR - users can only delete their own notifications
+    const deleted = await Notification.findOneAndDelete({ _id: notificationId, user: req.user._id });
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Notification not found' });
+    }
+
     res.json({ success: true, message: 'Notification deleted' });
   } catch (err) {
     console.error('Delete notification error:', err);
@@ -1417,10 +1625,10 @@ app.post('/notifications/preferences', isAuthenticated, async (req, res) => {
     if (isAjax) {
       return res.status(500).json({ success: false, message: 'Failed to update preferences' });
     }
-    res.status(500).render('error', { 
-      message: 'Failed to update notification preferences', 
-      user: req.user, 
-      note: req.note ? req.note.content : '' 
+    res.status(500).render('error', {
+      message: 'Failed to update notification preferences',
+      user: req.user,
+      note: req.note ? req.note.content : ''
     });
   }
 });
@@ -1432,7 +1640,7 @@ app.get('/notifications/unread-count', isAuthenticated, async (req, res) => {
       user: req.user._id,
       isRead: false
     });
-    
+
     res.json({ success: true, count });
   } catch (err) {
     console.error('Unread count error:', err);
@@ -1448,7 +1656,7 @@ app.get('/library', isAuthenticated, async (req, res) => {
     if (user.isAdmin) {
       return res.redirect('/admin');
     }
-    const books = await Book.find({ uploadedBy: req.session.userId });
+    const books = await Book.find({ uploadedBy: req.session.userId }).select('-fileData -thumbnail -coverImage -extractedText').lean();
     res.render('library', {
       books,
       user,
@@ -1480,7 +1688,8 @@ app.get('/pinned', isAuthenticated, async (req, res) => {
 app.post('/book/:bookId/pin', isAuthenticated, async (req, res) => {
   try {
     const bookId = req.params.bookId;
-    const user = await User.findById(req.session.userId);
+    // FIX: Use req.user instead of re-fetching from DB (already set by fetchUserAndNote middleware)
+    const user = req.user;
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -1499,8 +1708,8 @@ app.post('/book/:bookId/pin', isAuthenticated, async (req, res) => {
       user.pinnedBooks.push(bookId);
       book.pinCount = (book.pinCount || 0) + 1;
     }
-    await user.save();
-    await book.save();
+    // FIX: Run both saves in parallel
+    await Promise.all([user.save(), book.save()]);
     res.json({
       success: true,
       isPinned: !isPinned,
@@ -1544,13 +1753,13 @@ app.post('/upload', isAuthenticated, upload.single('file'), async (req, res) => 
     if (!fileType) {
       return res.status(400).render('upload', { error: 'File type not supported. Allowed: PDF, DOCX, and images (JPG, PNG, GIF, WebP)', user: req.user, note: req.note ? req.note.content : '' });
     }
-    
+
     // Validate file content
     const isValidFile = await validateFileContent(req.file.buffer, fileType);
     if (!isValidFile) {
       return res.status(400).render('upload', { error: 'File appears to be corrupted or invalid', user: req.user, note: req.note ? req.note.content : '' });
     }
-    
+
     // Extract text and metadata
     let numPages = 0;
     let extractedText = '';
@@ -1563,7 +1772,7 @@ app.post('/upload', isAuthenticated, upload.single('file'), async (req, res) => 
       numPages = 0;
       extractedText = '';
     }
-    
+
     // Generate thumbnail
     let thumbnail = null;
     let thumbnailType = null;
@@ -1585,7 +1794,7 @@ app.post('/upload', isAuthenticated, upload.single('file'), async (req, res) => 
           contentType: req.file.mimetype
         }
       });
-      
+
       await new Promise((resolve, reject) => {
         uploadStream.on('error', reject);
         uploadStream.on('finish', () => {
@@ -1594,11 +1803,11 @@ app.post('/upload', isAuthenticated, upload.single('file'), async (req, res) => 
         });
         uploadStream.end(req.file.buffer);
       });
-      
+
       console.log(`File uploaded to GridFS with ID: ${fileId}`);
     } catch (gridFsErr) {
       console.error('GridFS upload error:', gridFsErr);
-      return res.status(500).render('upload', { error: 'Failed to store file: ' + gridFsErr.message, user: req.user, note: req.note ? req.note.content : '' });
+      return res.status(500).render('upload', { error: 'Failed to store file. Please try again.', user: req.user, note: req.note ? req.note.content : '' });
     }
 
     const newBook = new Book({
@@ -1652,8 +1861,10 @@ app.get('/view/:bookId', isAuthenticated, async (req, res) => {
 });
 app.get('/file/:bookId', isAuthenticated, async (req, res) => {
   try {
-    const user = req.user;
-    if (user.isAdmin) {
+    // /file/ is excluded from fetchUserAndNote middleware, so req.user may be undefined.
+    // Fetch the user from the session if needed.
+    const user = req.user || (req.session.userId ? await User.findById(req.session.userId).lean() : null);
+    if (user && user.isAdmin) {
       return res.status(403).send('Admins cannot access this route');
     }
     const book = await Book.findById(req.params.bookId).select('fileId fileData contentType fileName visibility uploadedBy accessList');
@@ -1666,14 +1877,14 @@ app.get('/file/:bookId', isAuthenticated, async (req, res) => {
     if (!isOwner && !isPublic && !hasAccess) {
       return res.status(403).send('Access denied');
     }
-    
+
     res.set({
       'Content-Type': book.contentType,
       'Content-Disposition': `inline; filename="${book.fileName}"`,
       'Cache-Control': 'public, max-age=3600, immutable',
       'ETag': `W/"${book._id}"`
     });
-    
+
     // Try GridFS first, fall back to direct buffer for backward compatibility
     if (book.fileId && global.gfs) {
       try {
@@ -1714,7 +1925,7 @@ app.get('/favicon.ico', (req, res) => {
 app.get('/thumbnail/:bookId', async (req, res) => {
   try {
     const book = await Book.findById(req.params.bookId).select('coverImage coverImageType thumbnail thumbnailType visibility uploadedBy');
-    
+
     // Return custom cover if available
     if (book && book.coverImage && book.coverImageType) {
       res.set({
@@ -1994,22 +2205,22 @@ app.post('/book/:bookId/upload-cover', isAuthenticated, upload.single('coverImag
       if (!req.file.buffer || req.file.buffer.length === 0) {
         return res.status(400).json({ success: false, message: 'Invalid file buffer' });
       }
-      
+
       const sharpInstance = sharp(req.file.buffer, { failOn: 'none' });
       const metadata = await sharpInstance.metadata();
       console.log('Image metadata:', metadata);
-      
+
       coverImage = await sharp(req.file.buffer)
         .resize(300, 450, { fit: 'cover', position: 'center', withoutEnlargement: true })
         .png({ quality: 80 })
         .toBuffer();
-      
+
       if (!coverImage || coverImage.length === 0) {
         return res.status(400).json({ success: false, message: 'Failed to process image' });
       }
     } catch (imageErr) {
       console.error('Image processing error:', imageErr);
-      return res.status(400).json({ success: false, message: `Invalid image file: ${imageErr.message}` });
+      return res.status(400).json({ success: false, message: 'Invalid or corrupted image file. Please try a different image.' });
     }
 
     // Update the book with custom cover
@@ -2091,26 +2302,25 @@ app.get('/explore', isAuthenticated, async (req, res) => {
     if (user.isAdmin) {
       return res.redirect('/admin');
     }
-    const publicBooks = await Book.find({
-      visibility: 'public',
-      uploadedBy: { $ne: req.session.userId }
-    }).populate('uploadedBy', 'username');
-    const restrictedBooks = await Book.find({
-      visibility: 'restricted',
-      uploadedBy: { $ne: req.session.userId }
-    }).populate('uploadedBy', 'username');
-    const pendingRequests = await Request.find({
-      requestedBy: req.session.userId,
-      status: 'pending'
-    }).select('book');
+    // FIX: Run all queries in parallel with Promise.all + add .lean() to avoid Mongoose overhead
+    const [publicBooks, restrictedBooks, pendingRequests, trendingBooks] = await Promise.all([
+      Book.find({ visibility: 'public', uploadedBy: { $ne: req.session.userId } })
+        .select('-fileData -thumbnail -coverImage -extractedText')
+        .populate('uploadedBy', 'username')
+        .lean(),
+      Book.find({ visibility: 'restricted', uploadedBy: { $ne: req.session.userId } })
+        .select('-fileData -thumbnail -coverImage -extractedText')
+        .populate('uploadedBy', 'username')
+        .lean(),
+      Request.find({ requestedBy: req.session.userId, status: 'pending' }).select('book').lean(),
+      Book.find({ visibility: 'public', pinCount: { $gt: 0 } })
+        .sort({ pinCount: -1 })
+        .limit(5)
+        .select('title author description fileSize pinCount uploadedBy')
+        .populate('uploadedBy', 'username')
+        .lean()
+    ]);
     const pendingBookIds = pendingRequests.map(req => req.book.toString());
-    const trendingBooks = await Book.find({
-      visibility: 'public',
-      pinCount: { $gt: 0 }
-    })
-      .sort({ pinCount: -1 })
-      .limit(5)
-      .populate('uploadedBy', 'username');
     res.render('explore', {
       books: [...publicBooks, ...restrictedBooks],
       trendingBooks,
@@ -2526,25 +2736,28 @@ app.get('/explore/search', isAuthenticated, async (req, res) => {
       return res.json({ books: [] });
     }
     const searchRegex = new RegExp(query, 'i');
-    const publicBooks = await Book.find({
-      visibility: 'public',
-      uploadedBy: { $ne: req.session.userId },
-      $or: [
-        { title: searchRegex },
-        { author: searchRegex },
-        { tags: searchRegex }
-      ]
-    }).populate('uploadedBy', 'username');
-    const accessibleBooks = await Book.find({
-      visibility: 'restricted',
-      accessList: req.session.userId,
-      uploadedBy: { $ne: req.session.userId },
-      $or: [
-        { title: searchRegex },
-        { author: searchRegex },
-        { tags: searchRegex }
-      ]
-    }).populate('uploadedBy', 'username');
+    // FIX: Use $text search with the text index on title+author for fast indexed search.
+    // Falls back to regex if text index isn't available yet.
+    let publicBooks, accessibleBooks;
+    try {
+      [publicBooks, accessibleBooks] = await Promise.all([
+        Book.find({ visibility: 'public', uploadedBy: { $ne: req.session.userId }, $text: { $search: query } })
+          .select('title author description tags fileSize pinCount uploadedBy')
+          .populate('uploadedBy', 'username').lean(),
+        Book.find({ visibility: 'restricted', accessList: req.session.userId, uploadedBy: { $ne: req.session.userId }, $text: { $search: query } })
+          .select('title author description tags fileSize pinCount uploadedBy')
+          .populate('uploadedBy', 'username').lean()
+      ]);
+    } catch (textSearchErr) {
+      // Fallback to regex if $text index not yet active
+      const searchRegex = new RegExp(query, 'i');
+      [publicBooks, accessibleBooks] = await Promise.all([
+        Book.find({ visibility: 'public', uploadedBy: { $ne: req.session.userId }, $or: [{ title: searchRegex }, { author: searchRegex }, { tags: searchRegex }] })
+          .select('title author description tags fileSize pinCount uploadedBy').populate('uploadedBy', 'username').lean(),
+        Book.find({ visibility: 'restricted', accessList: req.session.userId, uploadedBy: { $ne: req.session.userId }, $or: [{ title: searchRegex }, { author: searchRegex }, { tags: searchRegex }] })
+          .select('title author description tags fileSize pinCount uploadedBy').populate('uploadedBy', 'username').lean()
+      ]);
+    }
     res.json({ books: [...publicBooks, ...accessibleBooks] });
   } catch (err) {
     console.error('Search error:', err);
@@ -2561,15 +2774,16 @@ app.get('/library/search', isAuthenticated, async (req, res) => {
     if (!query) {
       return res.json({ books: [] });
     }
-    const searchRegex = new RegExp(query, 'i');
-    const userBooks = await Book.find({
-      uploadedBy: req.session.userId,
-      $or: [
-        { title: searchRegex },
-        { author: searchRegex },
-        { tags: searchRegex }
-      ]
-    });
+    // FIX: Use $text search + lean() for fast results
+    let userBooks;
+    try {
+      userBooks = await Book.find({ uploadedBy: req.session.userId, $text: { $search: query } })
+        .select('title author description tags fileSize pinCount uploadDate').lean();
+    } catch (textSearchErr) {
+      const searchRegex = new RegExp(query, 'i');
+      userBooks = await Book.find({ uploadedBy: req.session.userId, $or: [{ title: searchRegex }, { author: searchRegex }, { tags: searchRegex }] })
+        .select('title author description tags fileSize pinCount uploadDate').lean();
+    }
     res.json({ books: userBooks });
   } catch (err) {
     console.error('Search error:', err);
@@ -2628,8 +2842,8 @@ app.get('/news', isAuthenticated, async (req, res) => {
       const hasAccess = (
         Array.isArray(book.accessList) && book.accessList.some(id => id.toString() === user._id.toString())
       ) || (
-        book.uploadedBy && book.uploadedBy._id && book.uploadedBy._id.toString() === user._id.toString()
-      );
+          book.uploadedBy && book.uploadedBy._id && book.uploadedBy._id.toString() === user._id.toString()
+        );
       return {
         ...book,
         hasPendingRequest: pendingBookIds.includes(book._id.toString()),
@@ -2724,10 +2938,10 @@ app.post('/admin/news/post', isAuthenticated, isAdmin, newsImageUpload.single('i
     }
     const news = new News(newsData);
     await news.save();
-    
+
     // Send notifications to all users using the new notification system
     await broadcastNewsNotification(news._id, sanitizedTitle, sanitizedContent);
-    
+
     res.redirect('/admin?success=News posted successfully and notifications sent');
   } catch (err) {
     console.error('News post error:', err);
@@ -2780,9 +2994,9 @@ app.post('/request-access', isAuthenticated, async (req, res) => {
         `,
         text: `Access Request for Restricted Book\n\nUser ${user.username} has requested access to your book "${book.title}".\n\nPlease review the request and grant access if appropriate.\n\nVisit Access Requests to manage this request: https://bookhive-rsd.onrender.com/access-requests\n\nBest regards,\nBookHive Team`,
         headers: {
-            'X-Priority': '3',
-            'X-MSMail-Priority': 'Normal',
-            'Importance': 'Normal'
+          'X-Priority': '3',
+          'X-MSMail-Priority': 'Normal',
+          'Importance': 'Normal'
         }
       };
       await transporter.sendMail(mailOptions);
@@ -2807,7 +3021,9 @@ app.get('/publications', isAuthenticated, async (req, res) => {
       .sort({ createdAt: -1 })
       .populate('postedBy', 'username')
       .lean();
-    const comments = await Comment.find()
+    // FIX: Only fetch comments for publications currently being shown (not ALL comments in DB)
+    const pubIds = publications.map(p => p._id);
+    const comments = await Comment.find({ publication: { $in: pubIds } })
       .populate('user', 'username')
       .lean();
     const commentsByPublication = {};
@@ -2900,11 +3116,11 @@ app.post('/publication', isAuthenticated, (req, res, next) => {
     await publication.save();
     const populatedPublication = await Publication.findById(publication._id).populate('postedBy', 'username');
     io.emit('newPublication', populatedPublication);
-    
-    // Send notifications to all users using the new notification system (excluding the publisher)
+
+    // FIX: Fire-and-forget notification broadcast so HTTP response is instant
     const previewText = sanitizedContent.replace(/<[^>]*>?/gm, '').substring(0, 200);
-    await broadcastPublicationNotification(publication._id, user._id, user.username, previewText);
-    
+    broadcastPublicationNotification(publication._id, user._id, user.username, previewText).catch(err => console.error('Publication broadcast error:', err));
+
     res.json({ success: true, message: 'Publication posted successfully' });
   } catch (err) {
     console.error('Publication post error:', err);
@@ -2956,13 +3172,13 @@ app.get('/view-pub-doc/:pubId/:index', isAuthenticated, async (req, res) => {
     if (!doc) {
       return res.status(404).render('error', { message: 'Document not found', user: req.user, note: req.note ? req.note.content : '' });
     }
-    
+
     // Determine file type from content type
     let fileType = 'pdf';
     if (doc.contentType === 'application/pdf') fileType = 'pdf';
     else if (doc.contentType.startsWith('image/')) fileType = 'image';
     else if (doc.contentType.includes('wordprocessingml') || doc.contentType.includes('word')) fileType = 'docx';
-    
+
     const tempBook = {
       _id: `${pub._id}-${index}`,
       title: doc.filename,
@@ -3119,9 +3335,10 @@ app.get('/applications/:appId', isAuthenticated, async (req, res) => {
       }
       appPath = userApp.filePath;
     }
+    // FIX: userApp is already fetched above — reuse it instead of another DB query
     let appName = isStaticApp
       ? appId.replace(/-/g, ' ').toUpperCase()
-      : (await Application.findById(appId))?.name || 'User Application';
+      : userApp?.name || 'User Application';
     const applications = await Application.find({}).select('name _id').lean();
     res.render('application', {
       applications: applications.map(app => ({
@@ -3174,30 +3391,21 @@ app.get('/community', isAuthenticated, async (req, res) => {
     if (user.isAdmin) {
       return res.redirect('/admin');
     }
-    const users = await User.find({ _id: { $ne: user._id }, isAdmin: false }).select('username _id');
-    const chatRequests = await PrivateChatRequest.find({
-      $or: [{ requester: user._id }, { recipient: user._id }]
-    })
-      .populate('requester', 'username')
-      .populate('recipient', 'username');
-    const activeChats = await PrivateChatRequest.find({
-      status: 'accepted',
-      $or: [{ requester: user._id }, { recipient: user._id }]
-    })
-      .populate('requester', 'username')
-      .populate('recipient', 'username');
-    const privateMessages = await PrivateMessage.find({
-      $or: [{ sender: user._id }, { recipient: user._id }]
-    })
-      .populate('sender', 'username')
-      .populate('recipient', 'username')
-      .sort({ timestamp: -1 })
-      .limit(100);
-    const messages = await Message.find({ profession: user.profession })
-      .sort({ timestamp: -1 })
-      .limit(50)
-      .populate('user', 'username')
-      .then(messages => messages.reverse());
+    // FIX: Run all community queries in parallel + lean() on read-only lists
+    const [users, chatRequests, activeChats, privateMessages, messages, totalUsers] = await Promise.all([
+      User.find({ _id: { $ne: user._id }, isAdmin: false }).select('username _id').lean(),
+      PrivateChatRequest.find({ $or: [{ requester: user._id }, { recipient: user._id }] })
+        .populate('requester', 'username').populate('recipient', 'username').lean(),
+      PrivateChatRequest.find({ status: 'accepted', $or: [{ requester: user._id }, { recipient: user._id }] })
+        .populate('requester', 'username').populate('recipient', 'username').lean(),
+      PrivateMessage.find({ $or: [{ sender: user._id }, { recipient: user._id }] })
+        .populate('sender', 'username').populate('recipient', 'username')
+        .sort({ timestamp: -1 }).limit(100).lean(),
+      Message.find({ profession: user.profession })
+        .sort({ timestamp: -1 }).limit(50).populate('user', 'username').lean()
+        .then(msgs => msgs.reverse()),
+      User.countDocuments()
+    ]);
     // Filter out users who already have an active chat
     const activeChatUserIds = activeChats.map(chat =>
       chat.requester._id.toString() === user._id.toString() ? chat.recipient._id.toString() : chat.requester._id.toString()
@@ -3211,7 +3419,7 @@ app.get('/community', isAuthenticated, async (req, res) => {
       privateMessages,
       messages,
       note: req.note ? req.note.content : '',
-      totalUsers: await User.countDocuments(),
+      totalUsers,
       activeUsers: activeUsers.size,
       currentPath: '/community'
     });
@@ -3258,14 +3466,14 @@ app.get('/private-chat/:chatId', isAuthenticated, async (req, res) => {
 // Discussions API
 app.get('/api/discussions', isAuthenticated, async (req, res) => {
   try {
-    const discussions = await Message.find({ 
+    const discussions = await Message.find({
       profession: req.user.profession,
-      isDiscussion: true 
+      isDiscussion: true
     })
-    .populate('user', 'username')
-    .sort({ timestamp: -1 })
-    .limit(20);
-    
+      .populate('user', 'username')
+      .sort({ timestamp: -1 })
+      .limit(20);
+
     res.json({ success: true, discussions: discussions || [] });
   } catch (err) {
     console.error('Error fetching discussions:', err);
@@ -3276,11 +3484,11 @@ app.get('/api/discussions', isAuthenticated, async (req, res) => {
 app.post('/api/discussions', isAuthenticated, async (req, res) => {
   try {
     const { content } = req.body;
-    
+
     if (!content) {
       return res.status(400).json({ success: false, message: 'Question required' });
     }
-    
+
     const discussion = new Message({
       user: req.user._id,
       content: content,
@@ -3290,10 +3498,10 @@ app.post('/api/discussions', isAuthenticated, async (req, res) => {
       tags: [],
       timestamp: new Date()
     });
-    
+
     await discussion.save();
     await discussion.populate('user', 'username');
-    
+
     res.json({ success: true, message: 'Question posted!', discussion });
   } catch (err) {
     console.error('Error creating discussion:', err);
@@ -3305,11 +3513,11 @@ app.post('/api/discussions', isAuthenticated, async (req, res) => {
 app.post('/api/discussions/:id/respond', isAuthenticated, async (req, res) => {
   try {
     const { content } = req.body;
-    
+
     if (!content) {
       return res.status(400).json({ success: false, message: 'Response required' });
     }
-    
+
     const response = new Message({
       user: req.user._id,
       content: content,
@@ -3318,10 +3526,10 @@ app.post('/api/discussions/:id/respond', isAuthenticated, async (req, res) => {
       responseToId: req.params.id,
       timestamp: new Date()
     });
-    
+
     await response.save();
     await response.populate('user', 'username name');
-    
+
     res.json({ success: true, message: 'Response posted!', response });
   } catch (err) {
     console.error('Error posting response:', err);
@@ -3340,9 +3548,9 @@ app.get('/api/discussions/:id/responses', isAuthenticated, async (req, res) => {
       isGroup: false,
       isGroupMessage: false
     })
-    .populate('user', 'username name')
-    .sort({ timestamp: 1 });
-    
+      .populate('user', 'username name')
+      .sort({ timestamp: 1 });
+
     res.json({ success: true, responses });
   } catch (err) {
     console.error('Error fetching responses:', err);
@@ -3353,24 +3561,26 @@ app.get('/api/discussions/:id/responses', isAuthenticated, async (req, res) => {
 // Events API
 app.get('/api/events', isAuthenticated, async (req, res) => {
   try {
-    const events = await Message.find({ 
+    const events = await Message.find({
       profession: req.user.profession,
-      isEvent: true 
+      isEvent: true
     })
-    .populate('user', 'username')
-    .sort({ timestamp: -1 })
-    .limit(20);
-    
-    res.json({ success: true, events: events.map(e => ({
-      _id: e._id,
-      title: e.eventTitle || 'Untitled Event',
-      description: e.content,
-      startDate: e.eventStart || e.timestamp,
-      endDate: e.eventEnd || e.timestamp,
-      type: e.eventType || 'meetup',
-      attendees: e.eventAttendees || 0,
-      user: e.user
-    })) || [] });
+      .populate('user', 'username')
+      .sort({ timestamp: -1 })
+      .limit(20);
+
+    res.json({
+      success: true, events: events.map(e => ({
+        _id: e._id,
+        title: e.eventTitle || 'Untitled Event',
+        description: e.content,
+        startDate: e.eventStart || e.timestamp,
+        endDate: e.eventEnd || e.timestamp,
+        type: e.eventType || 'meetup',
+        attendees: e.eventAttendees || 0,
+        user: e.user
+      })) || []
+    });
   } catch (err) {
     console.error('Error fetching events:', err);
     res.status(500).json({ success: false, message: 'Failed to load events' });
@@ -3380,11 +3590,11 @@ app.get('/api/events', isAuthenticated, async (req, res) => {
 app.post('/api/events', isAuthenticated, async (req, res) => {
   try {
     const { title, description, startDate, endDate, eventType } = req.body;
-    
+
     if (!title) {
       return res.status(400).json({ success: false, message: 'Title required' });
     }
-    
+
     const event = new Message({
       user: req.user._id,
       content: description || '',
@@ -3396,10 +3606,10 @@ app.post('/api/events', isAuthenticated, async (req, res) => {
       isEvent: true,
       timestamp: new Date()
     });
-    
+
     await event.save();
     await event.populate('user', 'username');
-    
+
     res.json({ success: true, message: 'Event created!', event });
   } catch (err) {
     console.error('Error creating event:', err);
@@ -3413,11 +3623,11 @@ app.post('/api/events/:eventId/join', isAuthenticated, async (req, res) => {
     if (!event) {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
-    
+
     if (!event.eventAttendees) event.eventAttendees = 0;
     event.eventAttendees++;
     await event.save();
-    
+
     res.json({ success: true, message: 'Joined event successfully!' });
   } catch (err) {
     console.error('Error joining event:', err);
@@ -3428,22 +3638,24 @@ app.post('/api/events/:eventId/join', isAuthenticated, async (req, res) => {
 // Groups API
 app.get('/api/groups', isAuthenticated, async (req, res) => {
   try {
-    const groups = await Message.find({ 
+    const groups = await Message.find({
       profession: req.user.profession,
-      isGroup: true 
+      isGroup: true
     })
-    .populate('user', 'username')
-    .sort({ timestamp: -1 })
-    .limit(20);
-    
-    res.json({ success: true, groups: groups.map(g => ({
-      _id: g._id,
-      name: g.groupName || 'Untitled Group',
-      description: g.content,
-      members: g.groupMembers || 0,
-      posts: g.groupPosts || 0,
-      user: g.user
-    })) || [] });
+      .populate('user', 'username')
+      .sort({ timestamp: -1 })
+      .limit(20);
+
+    res.json({
+      success: true, groups: groups.map(g => ({
+        _id: g._id,
+        name: g.groupName || 'Untitled Group',
+        description: g.content,
+        members: g.groupMembers || 0,
+        posts: g.groupPosts || 0,
+        user: g.user
+      })) || []
+    });
   } catch (err) {
     console.error('Error fetching groups:', err);
     res.status(500).json({ success: false, message: 'Failed to load groups' });
@@ -3453,11 +3665,11 @@ app.get('/api/groups', isAuthenticated, async (req, res) => {
 app.post('/api/groups', isAuthenticated, async (req, res) => {
   try {
     const { name, description } = req.body;
-    
+
     if (!name) {
       return res.status(400).json({ success: false, message: 'Group name required' });
     }
-    
+
     const group = new Message({
       user: req.user._id,
       content: description || '',
@@ -3469,10 +3681,10 @@ app.post('/api/groups', isAuthenticated, async (req, res) => {
       groupPosts: 0,
       timestamp: new Date()
     });
-    
+
     await group.save();
     await group.populate('user', 'username');
-    
+
     res.json({ success: true, message: 'Group created!', group });
   } catch (err) {
     console.error('Error creating group:', err);
@@ -3486,21 +3698,21 @@ app.post('/api/groups/:groupId/join', isAuthenticated, async (req, res) => {
     if (!group) {
       return res.status(404).json({ success: false, message: 'Group not found' });
     }
-    
+
     // Check if user already joined
     if (!group.groupMembersList) {
       group.groupMembersList = [];
     }
-    
+
     if (group.groupMembersList.includes(req.user._id)) {
       return res.json({ success: false, message: 'You already joined this group' });
     }
-    
+
     group.groupMembersList.push(req.user._id);
     if (!group.groupMembers) group.groupMembers = 0;
     group.groupMembers = group.groupMembersList.length;
     await group.save();
-    
+
     res.json({ success: true, message: 'Joined group successfully!' });
   } catch (err) {
     console.error('Error joining group:', err);
@@ -3513,19 +3725,19 @@ app.post('/api/groups/:groupId/messages', isAuthenticated, async (req, res) => {
   try {
     const { message: messageContent } = req.body;
     const group = await Message.findById(req.params.groupId);
-    
+
     if (!group || !group.isGroup) {
       return res.status(404).json({ success: false, message: 'Group not found' });
     }
-    
+
     // Check if user is member (convert to string for comparison)
     const userIdStr = req.user._id.toString();
     const isMember = group.groupMembersList && group.groupMembersList.some(memberId => memberId.toString() === userIdStr);
-    
+
     if (!isMember) {
       return res.status(403).json({ success: false, message: 'Not a member of this group' });
     }
-    
+
     const msg = new Message({
       user: req.user._id,
       content: messageContent,
@@ -3534,10 +3746,10 @@ app.post('/api/groups/:groupId/messages', isAuthenticated, async (req, res) => {
       groupId: req.params.groupId,
       timestamp: new Date()
     });
-    
+
     await msg.save();
     await msg.populate('user', 'name username');
-    
+
     res.json({ success: true, message: 'Message sent!', data: msg });
   } catch (err) {
     console.error('Error sending group message:', err);
@@ -3548,14 +3760,14 @@ app.post('/api/groups/:groupId/messages', isAuthenticated, async (req, res) => {
 // Get Group Messages
 app.get('/api/groups/:groupId/messages', isAuthenticated, async (req, res) => {
   try {
-    const messages = await Message.find({ 
+    const messages = await Message.find({
       groupId: req.params.groupId,
       isGroupMessage: true
     })
-    .populate('user', 'name username')
-    .sort({ timestamp: -1 })
-    .limit(50);
-    
+      .populate('user', 'name username')
+      .sort({ timestamp: -1 })
+      .limit(50);
+
     res.json({ success: true, messages: messages.reverse() || [] });
   } catch (err) {
     console.error('Error fetching group messages:', err);
@@ -3570,7 +3782,7 @@ app.get('/api/activity', isAuthenticated, async (req, res) => {
       .populate('user', 'username')
       .sort({ timestamp: -1 })
       .limit(30);
-    
+
     const activityFeed = activity.map(msg => ({
       _id: msg._id,
       user: msg.user,
@@ -3578,7 +3790,7 @@ app.get('/api/activity', isAuthenticated, async (req, res) => {
       type: msg.isDiscussion ? 'discussion' : msg.isEvent ? 'event' : msg.isGroup ? 'group' : 'message',
       timestamp: msg.timestamp
     }));
-    
+
     res.json({ success: true, activity: activityFeed });
   } catch (err) {
     console.error('Error fetching activity:', err);
@@ -3589,14 +3801,14 @@ app.get('/api/activity', isAuthenticated, async (req, res) => {
 // Top Members API
 app.get('/api/top-members', isAuthenticated, async (req, res) => {
   try {
-    const members = await User.find({ 
+    const members = await User.find({
       profession: req.user.profession,
-      isAdmin: false 
+      isAdmin: false
     })
-    .sort({ points: -1 })
-    .limit(12)
-    .select('username profession points');
-    
+      .sort({ points: -1 })
+      .limit(12)
+      .select('username profession points');
+
     const membersWithContributions = members.map(member => ({
       _id: member._id,
       username: member.username,
@@ -3604,7 +3816,7 @@ app.get('/api/top-members', isAuthenticated, async (req, res) => {
       points: member.points || 0,
       contributions: Math.floor((member.points || 0) / 10)
     }));
-    
+
     res.json({ success: true, members: membersWithContributions });
   } catch (err) {
     console.error('Error fetching members:', err);
@@ -3632,7 +3844,7 @@ async function sendDailyPublicationEmails() {
     const users = await User.find({ isAdmin: false }).select('email username');
     const emailList = users.map(user => user.email);
     const publicationHtml = publications.map((pub, index) => {
-      const imageTags = pub.images.map((img, j) => `<img src="cid:pub-${index}-img-${j}" alt="Publication Image ${j+1}" style="max-width: 300px;">`).join('');
+      const imageTags = pub.images.map((img, j) => `<img src="cid:pub-${index}-img-${j}" alt="Publication Image ${j + 1}" style="max-width: 300px;">`).join('');
       const docLinks = pub.documents.map((doc, j) => `<p><a href="https://bookhive-rsd.onrender.com/view-pub-doc/${pub._id}/${j}">View PDF: ${doc.filename}</a></p>`).join('');
       return `
         <div>
@@ -3671,9 +3883,9 @@ async function sendDailyPublicationEmails() {
         `,
         text: `Today's Top Publications on BookHive\n\n${publicationText}\n\nVisit Publications to see more: https://bookhive-rsd.onrender.com/publications\n\nBest regards,\nBookHive Team`,
         headers: {
-            'X-Priority': '3',
-            'X-MSMail-Priority': 'Normal',
-            'Importance': 'Normal'
+          'X-Priority': '3',
+          'X-MSMail-Priority': 'Normal',
+          'Importance': 'Normal'
         },
         attachments
       };
@@ -3867,7 +4079,7 @@ const SCHEMA_MAPPING = {
 // Keyword analysis for better query classification
 function analyzeQuery(query) {
   const lowerQuery = query.toLowerCase().trim();
-  
+
   const analysis = {
     isAuthorQuery: /\b(who|author|writer|creator|poet|by|from)\b/i.test(lowerQuery),
     isBookQuery: /\b(book|title|novel|publication|write|reading|read)\b/i.test(lowerQuery),
@@ -3880,38 +4092,38 @@ function analyzeQuery(query) {
     isPopularityQuery: /\b(popular|trending|most|favorite|liked|top|best|famous)\b/i.test(lowerQuery),
     isDateQuery: /\b(recent|latest|today|yesterday|week|month|year|new|old)\b/i.test(lowerQuery)
   };
-  
+
   return analysis;
 }
 
 // Determine which collection(s) to search based on query analysis
 function determineCollections(analysis) {
   const collections = [];
-  
+
   if (analysis.isAuthorQuery && analysis.isBookQuery) collections.push('books');
   else if (analysis.isAuthorQuery) collections.push('users');
-  
+
   if (analysis.isTopicQuery && !analysis.isEventQuery) collections.push('books');
-  
+
   if (analysis.isNewsQuery) collections.push('news');
-  
+
   if (analysis.isEventQuery) collections.push('messages'); // Messages with isEvent=true
-  
+
   if (analysis.isDiscussionQuery) collections.push('messages'); // Messages with isDiscussion=true
-  
+
   if (analysis.isGroupQuery) collections.push('messages'); // Messages with isGroup=true
-  
+
   if (analysis.isUserQuery) collections.push('users');
-  
+
   if (analysis.isPopularityQuery && (analysis.isBookQuery || analysis.isTopicQuery)) {
     collections.push('books');
   }
-  
+
   // If no specific collection identified, search books (most common)
   if (collections.length === 0 && !analysis.isNewsQuery && !analysis.isEventQuery) {
     collections.push('books');
   }
-  
+
   return [...new Set(collections)]; // Remove duplicates
 }
 
@@ -3919,9 +4131,9 @@ function determineCollections(analysis) {
 function classifyQueryV2(query) {
   const analysis = analyzeQuery(query);
   const collections = determineCollections(analysis);
-  
+
   console.log('Query Analysis:', { query, analysis, collections });
-  
+
   // Determine primary query type
   if (analysis.isAuthorQuery && analysis.isBookQuery) return 'author_books_query';
   if (analysis.isAuthorQuery && !analysis.isBookQuery) return 'authors_query';
@@ -3932,65 +4144,65 @@ function classifyQueryV2(query) {
   if (analysis.isUserQuery) return 'users_query';
   if (analysis.isPopularityQuery && collections.includes('books')) return 'popular_books_query';
   if (analysis.isTopicQuery || analysis.isBookQuery) return 'books_query';
-  
+
   return 'general_conversation';
 }
 
 // Helper function to determine query intent and classify user question - ENHANCED
 function classifyQuery(query) {
-    const lowerQuery = query.toLowerCase().trim();
-    
-    // Check for author-related queries FIRST (more specific)
-    if (lowerQuery.match(/^(who|list|show|tell|get|find).*(author|writer|creator|poet|novelist)/i) ||
-        lowerQuery.match(/author|authors only/i)) {
-        return 'authors_query';
-    }
-    
-    // Check for news queries with higher priority
-    if (lowerQuery.match(/news|update|latest|recent|current|what.*new|announcement/i)) {
-        return 'news_query';
-    }
-    
-    // Check for publication/post queries
-    if (lowerQuery.match(/publication|post|article|blog|share|published/i)) {
-        return 'publication_query';
-    }
-    
-    // Check for specific AI use case queries
-    if (lowerQuery.match(/gemini|claude|ai assistant|use case/i)) {
-        return 'usecase_query';
-    }
-    
-    // Check for document-related queries (like joins, SQL, technical topics)
-    if (lowerQuery.match(/join|inner join|left join|right join|sql join|database join|query|sql|database|relation|table|schema|field|column|index/i)) {
-        return 'books_query';
-    }
-    
-    // Check for books-related queries (more specific patterns)
-    if (lowerQuery.match(/^(what|show|list|find|get|tell|any).*(book|title|novel|document)/i) ||
-        lowerQuery.match(/book.*available|available.*book|books?$/i) ||
-        lowerQuery.match(/^books?\s/i) ||
-        lowerQuery.match(/(python|javascript|java|sql|mysql|database|web|cloud|data|machine|learning|artificial|programming|code|development|framework|library)/i)) {
-        return 'books_query';
-    }
-    
-    // Default to general conversation
-    return 'general_conversation';
+  const lowerQuery = query.toLowerCase().trim();
+
+  // Check for author-related queries FIRST (more specific)
+  if (lowerQuery.match(/^(who|list|show|tell|get|find).*(author|writer|creator|poet|novelist)/i) ||
+    lowerQuery.match(/author|authors only/i)) {
+    return 'authors_query';
+  }
+
+  // Check for news queries with higher priority
+  if (lowerQuery.match(/news|update|latest|recent|current|what.*new|announcement/i)) {
+    return 'news_query';
+  }
+
+  // Check for publication/post queries
+  if (lowerQuery.match(/publication|post|article|blog|share|published/i)) {
+    return 'publication_query';
+  }
+
+  // Check for specific AI use case queries
+  if (lowerQuery.match(/gemini|claude|ai assistant|use case/i)) {
+    return 'usecase_query';
+  }
+
+  // Check for document-related queries (like joins, SQL, technical topics)
+  if (lowerQuery.match(/join|inner join|left join|right join|sql join|database join|query|sql|database|relation|table|schema|field|column|index/i)) {
+    return 'books_query';
+  }
+
+  // Check for books-related queries (more specific patterns)
+  if (lowerQuery.match(/^(what|show|list|find|get|tell|any).*(book|title|novel|document)/i) ||
+    lowerQuery.match(/book.*available|available.*book|books?$/i) ||
+    lowerQuery.match(/^books?\s/i) ||
+    lowerQuery.match(/(python|javascript|java|sql|mysql|database|web|cloud|data|machine|learning|artificial|programming|code|development|framework|library)/i)) {
+    return 'books_query';
+  }
+
+  // Default to general conversation
+  return 'general_conversation';
 }
 
 // Helper function to extract keywords from query
 function extractKeywords(query) {
-    // Remove common words that don't add search value
-    const stopWords = new Set(['the', 'and', 'or', 'is', 'are', 'am', 'be', 'been', 'being',
-        'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could',
-        'about', 'what', 'any', 'some', 'provide', 'provide', 'details', 'information',
-        'show', 'tell', 'get', 'find', 'list', 'available', 'you', 'me', 'my', 'your',
-        'this', 'that', 'these', 'those', 'a', 'an', 'can', 'want', 'like', 'help']);
-    
-    const allKeywords = query.toLowerCase().match(/\b\w{3,}\b/g) || [];
-    const keywords = allKeywords.filter(k => !stopWords.has(k));
-    
-    return [...new Set(keywords)]; // Remove duplicates
+  // Remove common words that don't add search value
+  const stopWords = new Set(['the', 'and', 'or', 'is', 'are', 'am', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could',
+    'about', 'what', 'any', 'some', 'provide', 'provide', 'details', 'information',
+    'show', 'tell', 'get', 'find', 'list', 'available', 'you', 'me', 'my', 'your',
+    'this', 'that', 'these', 'those', 'a', 'an', 'can', 'want', 'like', 'help']);
+
+  const allKeywords = query.toLowerCase().match(/\b\w{3,}\b/g) || [];
+  const keywords = allKeywords.filter(k => !stopWords.has(k));
+
+  return [...new Set(keywords)]; // Remove duplicates
 }
 
 // COLLECTION-SPECIFIC SEARCH FUNCTIONS
@@ -4007,7 +4219,7 @@ async function searchUsersByKeywords(keywords) {
         { profession: searchRegex }
       ]
     }).select('username email profession isAdmin').limit(20);
-    
+
     return users;
   } catch (err) {
     console.error('Error searching users:', err);
@@ -4025,7 +4237,7 @@ async function searchNewsByKeywords(keywords) {
         { content: searchRegex }
       ]
     }).sort({ createdAt: -1 }).limit(20);
-    
+
     return news;
   } catch (err) {
     console.error('Error searching news:', err);
@@ -4045,7 +4257,7 @@ async function searchEventsByKeywords(keywords) {
         { content: searchRegex }
       ]
     }).sort({ eventStart: -1 }).limit(20);
-    
+
     return events;
   } catch (err) {
     console.error('Error searching events:', err);
@@ -4065,7 +4277,7 @@ async function searchDiscussionsByKeywords(keywords) {
         { content: searchRegex }
       ]
     }).sort({ createdAt: -1 }).limit(20);
-    
+
     return discussions;
   } catch (err) {
     console.error('Error searching discussions:', err);
@@ -4084,7 +4296,7 @@ async function searchGroupsByKeywords(keywords) {
         { content: searchRegex }
       ]
     }).sort({ createdAt: -1 }).limit(20);
-    
+
     return groups;
   } catch (err) {
     console.error('Error searching groups:', err);
@@ -4099,7 +4311,7 @@ async function searchPublicationsByKeywords(keywords) {
     const publications = await Publication.find({
       content: searchRegex
     }).sort({ createdAt: -1 }).limit(20);
-    
+
     return publications;
   } catch (err) {
     console.error('Error searching publications:', err);
@@ -4109,607 +4321,592 @@ async function searchPublicationsByKeywords(keywords) {
 
 // Helper function to search books by keywords with fallback to all books
 async function searchBooksByKeywords(keywords, queryText, getAllIfEmpty = false) {
-    try {
-        console.log('Searching with keywords:', keywords);
-        
-        let books = [];
-        
-        // If keywords provided, search by metadata
-        if (keywords.length > 0) {
-            const searchRegex = new RegExp(keywords.join('|'), 'i');
-            
-            // Search in title, author, tags, description AND filter by public visibility
-            books = await Book.find({
-                visibility: 'public',
-                $or: [
-                    { title: searchRegex },
-                    { author: searchRegex },
-                    { tags: searchRegex },
-                    { description: searchRegex }
-                ]
-            })
-            .select('title author description tags uploadDate fileSize visibility')
-            .sort({ uploadDate: -1 })
-            .limit(15);
-            
-            console.log('Books found with keyword filters:', books.length);
-        }
-        
-        // If no books found, try getting all public books (Level 2 fallback)
-        if (books.length === 0) {
-            console.log('No keyword matches found, fetching all public books...');
-            books = await Book.find({ visibility: 'public' })
-                .select('title author description tags uploadDate fileSize visibility')
-                .sort({ uploadDate: -1 })
-                .limit(15);
-            
-            console.log('All public books found:', books.length);
-        }
-        
-        return books;
-    } catch (error) {
-        console.error('Search books error:', error);
-        return [];
+  try {
+    console.log('Searching with keywords:', keywords);
+
+    let books = [];
+
+    // If keywords provided, search by metadata
+    if (keywords.length > 0) {
+      const searchRegex = new RegExp(keywords.join('|'), 'i');
+
+      // Search in title, author, tags, description AND filter by public visibility
+      books = await Book.find({
+        visibility: 'public',
+        $or: [
+          { title: searchRegex },
+          { author: searchRegex },
+          { tags: searchRegex },
+          { description: searchRegex }
+        ]
+      })
+        .select('title author description tags uploadDate fileSize visibility')
+        .sort({ uploadDate: -1 })
+        .limit(15);
+
+      console.log('Books found with keyword filters:', books.length);
     }
+
+    // If no books found, try getting all public books (Level 2 fallback)
+    if (books.length === 0) {
+      console.log('No keyword matches found, fetching all public books...');
+      books = await Book.find({ visibility: 'public' })
+        .select('title author description tags uploadDate fileSize visibility')
+        .sort({ uploadDate: -1 })
+        .limit(15);
+
+      console.log('All public books found:', books.length);
+    }
+
+    return books;
+  } catch (error) {
+    console.error('Search books error:', error);
+    return [];
+  }
 }
 
-// Helper function to search book content by PDF text - ENHANCED FOR DOCUMENT TOPICS
+// Helper function to search book content by text - FIX: Uses pre-extracted extractedText field
+// instead of loading all PDF binaries from MongoDB and parsing them in-memory (which was catastrophic)
 async function searchBookContentByKeywords(keywords) {
-    try {
-        console.log('Searching PDF content with keywords:', keywords);
-        
-        if (keywords.length === 0) return [];
-        
-        const books = await Book.find({ visibility: 'public' })
-            .select('title author description tags fileData uploadDate')
-            .limit(30);
-        
-        const matchedBooks = [];
-        const keywordLower = keywords.map(k => k.toLowerCase());
-        
-        for (const book of books) {
-            try {
-                if (book.fileData) {
-                    const pdfData = await pdfParse(book.fileData);
-                    const textContent = pdfData.text.toLowerCase();
-                    
-                    // Check if keywords match in PDF content with occurrence count
-                    const keywordMatches = [];
-                    keywordLower.forEach(keyword => {
-                        if (textContent.includes(keyword)) {
-                            const regex = new RegExp(keyword, 'gi');
-                            const matches = textContent.match(regex);
-                            keywordMatches.push({
-                                keyword,
-                                count: matches ? matches.length : 0,
-                                found: true
-                            });
-                        }
-                    });
-                    
-                    if (keywordMatches.some(m => m.found)) {
-                        matchedBooks.push({
-                            title: book.title,
-                            author: book.author,
-                            description: book.description,
-                            tags: book.tags,
-                            uploadDate: book.uploadDate,
-                            matchedInContent: true,
-                            keywordMatches: keywordMatches.filter(m => m.found)
-                        });
-                    }
-                }
-            } catch (pdfError) {
-                console.error(`Error parsing PDF for ${book.title}:`, pdfError.message);
-            }
-        }
-        
-        console.log('PDF search matched books:', matchedBooks.length);
-        return matchedBooks;
-    } catch (error) {
-        console.error('Search book content error:', error);
-        return [];
-    }
+  try {
+    console.log('Searching extractedText content with keywords:', keywords);
+
+    if (keywords.length === 0) return [];
+
+    // Use the pre-stored extractedText field (saved on upload) — zero in-memory PDF parsing
+    const searchRegex = new RegExp(keywords.join('|'), 'i');
+    const books = await Book.find({
+      visibility: 'public',
+      extractedText: { $regex: searchRegex }
+    })
+      .select('title author description tags uploadDate')
+      .sort({ uploadDate: -1 })
+      .limit(15)
+      .lean();
+
+    const keywordLower = keywords.map(k => k.toLowerCase());
+    const matchedBooks = books.map(book => {
+      const textContent = (book.title + ' ' + book.author + ' ' + (book.description || '') + ' ' + (book.tags || []).join(' ')).toLowerCase();
+      const keywordMatches = keywordLower
+        .filter(kw => textContent.includes(kw))
+        .map(kw => ({ keyword: kw, found: true }));
+      return {
+        title: book.title,
+        author: book.author,
+        description: book.description,
+        tags: book.tags,
+        uploadDate: book.uploadDate,
+        matchedInContent: true,
+        keywordMatches
+      };
+    });
+
+    console.log('extractedText search matched books:', matchedBooks.length);
+    return matchedBooks;
+  } catch (error) {
+    console.error('Search book content error:', error);
+    return [];
+  }
 }
 
 // Helper function to get all authors
 async function getAllAuthors() {
-    try {
-        const authors = await Book.aggregate([
-            { $match: { visibility: 'public' } },
-            {
-                $group: {
-                    _id: '$author',
-                    bookCount: { $sum: 1 },
-                    books: { $push: '$title' }
-                }
-            },
-            { $sort: { bookCount: -1 } },
-            { $limit: 20 }
-        ]);
-        return authors;
-    } catch (error) {
-        console.error('Get authors error:', error);
-        return [];
-    }
+  try {
+    const authors = await Book.aggregate([
+      { $match: { visibility: 'public' } },
+      {
+        $group: {
+          _id: '$author',
+          bookCount: { $sum: 1 },
+          books: { $push: '$title' }
+        }
+      },
+      { $sort: { bookCount: -1 } },
+      { $limit: 20 }
+    ]);
+    return authors;
+  } catch (error) {
+    console.error('Get authors error:', error);
+    return [];
+  }
 }
 
 // Helper function to get all public books
 async function getAllPublicBooks() {
-    try {
-        const books = await Book.find({ visibility: 'public' })
-            .select('title author description tags uploadDate fileSize')
-            .sort({ uploadDate: -1 })
-            .limit(20);
-        return books;
-    } catch (error) {
-        console.error('Get all books error:', error);
-        return [];
-    }
+  try {
+    const books = await Book.find({ visibility: 'public' })
+      .select('title author description tags uploadDate fileSize')
+      .sort({ uploadDate: -1 })
+      .limit(20);
+    return books;
+  } catch (error) {
+    console.error('Get all books error:', error);
+    return [];
+  }
 }
 
 // Helper function to format books response
 function formatBooksResponse(books, isSearchResult = false) {
-    if (!books || books.length === 0) {
-        let message = isSearchResult 
-            ? 'No books found matching your search. Try asking for all available books or a specific topic.'
-            : 'No public books are currently available in the system.';
-        return message;
+  if (!books || books.length === 0) {
+    let message = isSearchResult
+      ? 'No books found matching your search. Try asking for all available books or a specific topic.'
+      : 'No public books are currently available in the system.';
+    return message;
+  }
+
+  let response = '**📚 Books Available in BookHive:**\n\n';
+  books.forEach((book, index) => {
+    response += `${index + 1}. **${book.title}** by *${book.author}*\n`;
+    if (book.description) {
+      response += `   📄 ${book.description.substring(0, 80)}...\n`;
     }
-    
-    let response = '**📚 Books Available in BookHive:**\n\n';
-    books.forEach((book, index) => {
-        response += `${index + 1}. **${book.title}** by *${book.author}*\n`;
-        if (book.description) {
-            response += `   📄 ${book.description.substring(0, 80)}...\n`;
-        }
-        if (book.tags && book.tags.length > 0) {
-            response += `   🏷️ Tags: ${book.tags.slice(0, 3).join(', ')}\n`;
-        }
-        response += '\n';
-    });
-    
-    response += '\n**💡 Would you like to know more?**\n';
-    response += '- Ask for **specific topics** (e.g., "books on AI")\n';
-    response += '- Ask for **authors** available in BookHive\n';
-    response += '- Ask to **see more books**';
-    
-    return response;
+    if (book.tags && book.tags.length > 0) {
+      response += `   🏷️ Tags: ${book.tags.slice(0, 3).join(', ')}\n`;
+    }
+    response += '\n';
+  });
+
+  response += '\n**💡 Would you like to know more?**\n';
+  response += '- Ask for **specific topics** (e.g., "books on AI")\n';
+  response += '- Ask for **authors** available in BookHive\n';
+  response += '- Ask to **see more books**';
+
+  return response;
 }
 
 // Helper function to format authors response
 function formatAuthorsResponse(authors) {
-    if (!authors || authors.length === 0) {
-        return 'No authors available in the system yet. Be the first to upload a book!';
+  if (!authors || authors.length === 0) {
+    return 'No authors available in the system yet. Be the first to upload a book!';
+  }
+
+  let response = '**✍️ Current Authors Available in BookHive:**\n\n';
+  authors.forEach((author, index) => {
+    const authorName = author._id || 'Unknown';
+    response += `${index + 1}. **${authorName}** - ${author.bookCount} book(s)\n`;
+    if (author.books && author.books.length > 0) {
+      response += `   📚 ${author.books.slice(0, 2).join(', ')}\n`;
     }
-    
-    let response = '**✍️ Current Authors Available in BookHive:**\n\n';
-    authors.forEach((author, index) => {
-        const authorName = author._id || 'Unknown';
-        response += `${index + 1}. **${authorName}** - ${author.bookCount} book(s)\n`;
-        if (author.books && author.books.length > 0) {
-            response += `   📚 ${author.books.slice(0, 2).join(', ')}\n`;
-        }
-    });
-    
-    response += '\n**Want to explore more?** Ask me about specific books or topics!';
-    return response;
+  });
+
+  response += '\n**Want to explore more?** Ask me about specific books or topics!';
+  return response;
 }
 
 app.post('/api/chatbot', isAuthenticated, async (req, res) => {
-    try {
-        const { query } = req.body;
-        if (!query) return res.status(400).json({ success: false, message: 'Query is required.' });
+  try {
+    const { query } = req.body;
+    if (!query) return res.status(400).json({ success: false, message: 'Query is required.' });
 
-        const queryType = classifyQuery(query);
-        const keywords = extractKeywords(query);
-        
-        console.log('=== CHATBOT DEBUG ===');
-        console.log('User Query:', query);
-        console.log('Query Type:', queryType);
-        console.log('Keywords:', keywords);
+    const queryType = classifyQuery(query);
+    const keywords = extractKeywords(query);
 
-        // --- MULTI-COLLECTION SCHEMA-AWARE SEARCH ---
-        
-        // --- Step 1: Handle Books Query ---
-        if (queryType === 'books_query') {
-            console.log('Processing BOOKS_QUERY...');
-            
-            let books = await searchBooksByKeywords(keywords, query, false);
-            console.log('Books found with keyword search:', books.length);
-            
-            // LEVEL 2: If no metadata matches but we have keywords, search PDF content
-            if (books.length === 0 && keywords.length > 0) {
-                console.log('No metadata matches, searching PDF content for specific topics...');
-                books = await searchBookContentByKeywords(keywords);
-                console.log('Books found with PDF content search:', books.length);
-                
-                if (books.length > 0) {
-                    let response = '**📚 Books with "' + keywords.join(', ') + '" in Content:**\n\n';
-                    books.forEach((book, index) => {
-                        response += `${index + 1}. **${book.title}** by *${book.author}*\n`;
-                        if (book.description) {
-                            response += `   📄 ${book.description.substring(0, 80)}...\n`;
-                        }
-                        if (book.keywordMatches && book.keywordMatches.length > 0) {
-                            response += `   ✓ Topics found: ${book.keywordMatches.map(m => m.keyword).join(', ')}\n`;
-                        }
-                        response += '\n';
-                    });
-                    response += '\n**💡 Found in document content!** These books contain your search terms.';
-                    return res.json({ success: true, response });
-                }
+    console.log('=== CHATBOT DEBUG ===');
+    console.log('User Query:', query);
+    console.log('Query Type:', queryType);
+    console.log('Keywords:', keywords);
+
+    // --- MULTI-COLLECTION SCHEMA-AWARE SEARCH ---
+
+    // --- Step 1: Handle Books Query ---
+    if (queryType === 'books_query') {
+      console.log('Processing BOOKS_QUERY...');
+
+      let books = await searchBooksByKeywords(keywords, query, false);
+      console.log('Books found with keyword search:', books.length);
+
+      // LEVEL 2: If no metadata matches but we have keywords, search PDF content
+      if (books.length === 0 && keywords.length > 0) {
+        console.log('No metadata matches, searching PDF content for specific topics...');
+        books = await searchBookContentByKeywords(keywords);
+        console.log('Books found with PDF content search:', books.length);
+
+        if (books.length > 0) {
+          let response = '**📚 Books with "' + keywords.join(', ') + '" in Content:**\n\n';
+          books.forEach((book, index) => {
+            response += `${index + 1}. **${book.title}** by *${book.author}*\n`;
+            if (book.description) {
+              response += `   📄 ${book.description.substring(0, 80)}...\n`;
             }
-            
-            // LEVEL 3: If still no results, get all public books
-            if (books.length === 0) {
-                console.log('No matches found, fetching all public books as fallback...');
-                books = await getAllPublicBooks();
-                console.log('All public books found:', books.length);
+            if (book.keywordMatches && book.keywordMatches.length > 0) {
+              response += `   ✓ Topics found: ${book.keywordMatches.map(m => m.keyword).join(', ')}\n`;
             }
-            
-            const response = formatBooksResponse(books, keywords.length > 0);
-            return res.json({ success: true, response });
+            response += '\n';
+          });
+          response += '\n**💡 Found in document content!** These books contain your search terms.';
+          return res.json({ success: true, response });
         }
+      }
 
-        // --- Step 2: Handle Authors Query ---
-        if (queryType === 'authors_query') {
-            console.log('Processing AUTHORS_QUERY...');
-            const authors = await getAllAuthors();
-            console.log('Authors found:', authors.length);
-            const response = formatAuthorsResponse(authors);
-            return res.json({ success: true, response });
-        }
+      // LEVEL 3: If still no results, get all public books
+      if (books.length === 0) {
+        console.log('No matches found, fetching all public books as fallback...');
+        books = await getAllPublicBooks();
+        console.log('All public books found:', books.length);
+      }
 
-        // --- Step 3: Handle Users/Members Query ---
-        if (queryType.includes('user') || query.toLowerCase().match(/\b(member|people|person|admin|user)\b/i)) {
-            console.log('Processing USERS_QUERY...');
-            const users = await searchUsersByKeywords(keywords);
-            console.log('Users found:', users.length);
-            
-            if (users.length > 0) {
-                let response = '**👥 Members in BookHive:**\n\n';
-                users.forEach((user, index) => {
-                    response += `${index + 1}. **${user.username}**\n`;
-                    if (user.email) response += `   📧 ${user.email}\n`;
-                    if (user.profession) response += `   💼 ${user.profession}\n`;
-                    if (user.isAdmin) response += `   ⭐ Administrator\n`;
-                    response += '\n';
-                });
-                return res.json({ success: true, response });
-            }
-        }
-
-        // --- Step 4: Handle Events Query ---
-        if (queryType.includes('event') || query.toLowerCase().match(/\b(event|conference|meeting|seminar|upcoming|scheduled)\b/i)) {
-            console.log('Processing EVENTS_QUERY...');
-            const events = await searchEventsByKeywords(keywords);
-            console.log('Events found:', events.length);
-            
-            if (events.length > 0) {
-                let response = '**📅 Upcoming Events:**\n\n';
-                events.forEach((event, index) => {
-                    response += `${index + 1}. **${event.eventTitle || 'Untitled'}**\n`;
-                    if (event.eventType) response += `   🎯 Type: ${event.eventType}\n`;
-                    if (event.eventStart) response += `   ⏰ Start: ${new Date(event.eventStart).toLocaleString()}\n`;
-                    response += '\n';
-                });
-                return res.json({ success: true, response });
-            }
-        }
-
-        // --- Step 5: Handle Discussions Query ---
-        if (queryType.includes('discussion') || query.toLowerCase().match(/\b(discussion|forum|topic|thread|debate)\b/i)) {
-            console.log('Processing DISCUSSIONS_QUERY...');
-            const discussions = await searchDiscussionsByKeywords(keywords);
-            console.log('Discussions found:', discussions.length);
-            
-            if (discussions.length > 0) {
-                let response = '**💬 Popular Discussions:**\n\n';
-                discussions.forEach((disc, index) => {
-                    response += `${index + 1}. **${disc.category || 'General Discussion'}**\n`;
-                    if (disc.tags && disc.tags.length > 0) response += `   🏷️ ${disc.tags.join(', ')}\n`;
-                    response += `   💭 ${disc.content.substring(0, 60)}...\n\n`;
-                });
-                return res.json({ success: true, response });
-            }
-        }
-
-        // --- Step 6: Handle Groups Query ---
-        if (queryType.includes('group') || query.toLowerCase().match(/\b(group|community|team|circle|organization)\b/i)) {
-            console.log('Processing GROUPS_QUERY...');
-            const groups = await searchGroupsByKeywords(keywords);
-            console.log('Groups found:', groups.length);
-            
-            if (groups.length > 0) {
-                let response = '**🤝 Active Groups:**\n\n';
-                groups.forEach((group, index) => {
-                    response += `${index + 1}. **${group.groupName || 'Unnamed Group'}**\n`;
-                    response += `   📝 ${group.content.substring(0, 60)}...\n\n`;
-                });
-                response += '\n**📢 Was this helpful?** Tell us if these results were what you needed!';
-                return res.json({ success: true, response });
-            }
-        }
-
-        // --- Step 6.5: Handle Publications Query ---
-        if (queryType.includes('publication') || query.toLowerCase().match(/\b(post|publication|article|blog|share)\b/i)) {
-            console.log('Processing PUBLICATIONS_QUERY...');
-            const publications = await searchPublicationsByKeywords(keywords);
-            console.log('Publications found:', publications.length);
-            
-            if (publications.length > 0) {
-                let response = '**📑 Recent Publications:**\n\n';
-                publications.forEach((pub, index) => {
-                    response += `${index + 1}. **Publication**\n`;
-                    response += `   📝 ${pub.content.substring(0, 80)}...\n`;
-                    response += `   👍 ${pub.likeCount || 0} likes\n\n`;
-                });
-                response += '\n**📢 Was this helpful?** Tell us what you think!';
-                return res.json({ success: true, response });
-            }
-        }
-
-        // --- Step 7: Handle AI Use Case Queries ---
-        if (queryType === 'usecase_query') {
-            console.log('Processing USECASE_QUERY...');
-            
-            const isGeminiQuery = query.toLowerCase().includes('gemini');
-            const isClaudeQuery = query.toLowerCase().includes('claude');
-            
-            let searchTerm = isGeminiQuery ? 'gemini' : (isClaudeQuery ? 'claude' : '');
-            console.log('AI Search Term:', searchTerm);
-            
-            if (searchTerm) {
-                let books = await searchBooksByKeywords([searchTerm], query, false);
-                console.log('Books found with AI keyword search:', books.length);
-                
-                if (books.length > 0) {
-                    const response = formatBooksResponse(books, true);
-                    return res.json({ success: true, response });
-                } else {
-                    console.log('No AI-specific matches, searching PDF content...');
-                    books = await searchBookContentByKeywords([searchTerm]);
-                    console.log('Books found with AI PDF search:', books.length);
-                    
-                    if (books.length > 0) {
-                        const response = formatBooksResponse(books, true);
-                        return res.json({ success: true, response });
-                    } else {
-                        console.log('No AI-specific books found, showing alternatives...');
-                        const allBooks = await getAllPublicBooks();
-                        
-                        let response = `**📖 No books specifically about "${searchTerm}" use cases found.**\n\n`;
-                        response += `But here are **other books available** that might interest you:\n\n`;
-                        
-                        if (allBooks.length > 0) {
-                            allBooks.slice(0, 5).forEach((book, index) => {
-                                response += `${index + 1}. **${book.title}** by *${book.author}*\n`;
-                            });
-                            response += `\n**💡 Suggestions:**\n- Ask for **all available books**\n- Ask about **authors** in BookHive\n- Try searching with **different keywords**`;
-                        } else {
-                            response += 'No books are currently available in the system.';
-                        }
-                        
-                        return res.json({ success: true, response });
-                    }
-                }
-            }
-        }
-
-        // --- Step 8: Handle News Query - NOW SEARCHES WITH KEYWORDS ---
-        if (queryType === 'news_query') {
-            console.log('Processing NEWS_QUERY...');
-            try {
-                let news = [];
-                
-                // If keywords provided, search news
-                if (keywords.length > 0) {
-                    console.log('Searching news with keywords:', keywords);
-                    news = await searchNewsByKeywords(keywords);
-                    console.log('News found with keyword search:', news.length);
-                }
-                
-                // If no keyword matches, get latest news
-                if (news.length === 0) {
-                    console.log('No keyword matches, fetching latest news...');
-                    news = await News.find()
-                        .select('title content createdAt')
-                        .sort({ createdAt: -1 })
-                        .limit(5);
-                    console.log('Latest news found:', news.length);
-                }
-                
-                if (news.length === 0) {
-                    return res.json({ success: true, response: '📰 No news available at this time.' });
-                }
-                
-                let response = '**📰 Latest News' + (keywords.length > 0 ? ' about ' + keywords.join(', ') : '') + ':**\n\n';
-                news.forEach((item, index) => {
-                    response += `${index + 1}. **${item.title}**\n`;
-                    response += `   ${item.content.substring(0, 100)}...\n\n`;
-                });
-                
-                response += '\n**💡 Want to explore more?** Ask about books, authors, events, or discussions!';
-                response += '\n**📢 Was this helpful?** Let us know your feedback!';
-                return res.json({ success: true, response });
-            } catch (error) {
-                console.error('News query error:', error);
-                return res.json({ success: true, response: 'Unable to fetch news at this moment.' });
-            }
-        }
-
-        // --- Step 9: Handle General Conversation ---
-        console.log('Processing GENERAL_CONVERSATION...');
-        const generalResponses = [
-            "👋 **Hello! I'm the BookHive AI Assistant.**\n\nI can help you with:\n- 📚 **What books are available?** - I'll show you our book collection\n- ✍️ **Who are the authors?** - I'll list all authors in BookHive\n- 📰 **Recent news** - I'll share the latest updates\n- 👥 **Members & Users** - Find community members\n- 📅 **Events** - Upcoming events and conferences\n- 💬 **Discussions** - Active forum discussions\n\n**What would you like to know?**",
-            
-            "👋 **Hi there! Welcome to BookHive.**\n\nYou can ask me about:\n- 📚 Available books in our collection\n- ✍️ Authors and their work\n- 📰 Latest news and updates\n- 👥 Community members\n- 📅 Upcoming events\n- 💬 Discussions & forums\n\n**How can I assist you today?**",
-            
-            "👋 **I'm here to help!**\n\nYou can ask me:\n- 📚 What books do you have?\n- ✍️ Who are the current authors?\n- 📰 What's new in BookHive?\n- 👥 Members available?\n- 📅 Any upcoming events?\n- 💬 Active discussions?\n\n**What interests you?**"
-        ];
-        
-        const randomResponse = generalResponses[Math.floor(Math.random() * generalResponses.length)];
-        return res.json({ success: true, response: randomResponse });
-
-    } catch (err) {
-        console.error('=== CHATBOT ERROR ===', err);
-        res.status(500).json({ success: false, message: 'An error occurred while processing your request. Please try again later.' });
+      const response = formatBooksResponse(books, keywords.length > 0);
+      return res.json({ success: true, response });
     }
+
+    // --- Step 2: Handle Authors Query ---
+    if (queryType === 'authors_query') {
+      console.log('Processing AUTHORS_QUERY...');
+      const authors = await getAllAuthors();
+      console.log('Authors found:', authors.length);
+      const response = formatAuthorsResponse(authors);
+      return res.json({ success: true, response });
+    }
+
+    // --- Step 3: Handle Users/Members Query ---
+    if (queryType.includes('user') || query.toLowerCase().match(/\b(member|people|person|admin|user)\b/i)) {
+      console.log('Processing USERS_QUERY...');
+      const users = await searchUsersByKeywords(keywords);
+      console.log('Users found:', users.length);
+
+      if (users.length > 0) {
+        let response = '**👥 Members in BookHive:**\n\n';
+        users.forEach((user, index) => {
+          response += `${index + 1}. **${user.username}**\n`;
+          if (user.email) response += `   📧 ${user.email}\n`;
+          if (user.profession) response += `   💼 ${user.profession}\n`;
+          if (user.isAdmin) response += `   ⭐ Administrator\n`;
+          response += '\n';
+        });
+        return res.json({ success: true, response });
+      }
+    }
+
+    // --- Step 4: Handle Events Query ---
+    if (queryType.includes('event') || query.toLowerCase().match(/\b(event|conference|meeting|seminar|upcoming|scheduled)\b/i)) {
+      console.log('Processing EVENTS_QUERY...');
+      const events = await searchEventsByKeywords(keywords);
+      console.log('Events found:', events.length);
+
+      if (events.length > 0) {
+        let response = '**📅 Upcoming Events:**\n\n';
+        events.forEach((event, index) => {
+          response += `${index + 1}. **${event.eventTitle || 'Untitled'}**\n`;
+          if (event.eventType) response += `   🎯 Type: ${event.eventType}\n`;
+          if (event.eventStart) response += `   ⏰ Start: ${new Date(event.eventStart).toLocaleString()}\n`;
+          response += '\n';
+        });
+        return res.json({ success: true, response });
+      }
+    }
+
+    // --- Step 5: Handle Discussions Query ---
+    if (queryType.includes('discussion') || query.toLowerCase().match(/\b(discussion|forum|topic|thread|debate)\b/i)) {
+      console.log('Processing DISCUSSIONS_QUERY...');
+      const discussions = await searchDiscussionsByKeywords(keywords);
+      console.log('Discussions found:', discussions.length);
+
+      if (discussions.length > 0) {
+        let response = '**💬 Popular Discussions:**\n\n';
+        discussions.forEach((disc, index) => {
+          response += `${index + 1}. **${disc.category || 'General Discussion'}**\n`;
+          if (disc.tags && disc.tags.length > 0) response += `   🏷️ ${disc.tags.join(', ')}\n`;
+          response += `   💭 ${disc.content.substring(0, 60)}...\n\n`;
+        });
+        return res.json({ success: true, response });
+      }
+    }
+
+    // --- Step 6: Handle Groups Query ---
+    if (queryType.includes('group') || query.toLowerCase().match(/\b(group|community|team|circle|organization)\b/i)) {
+      console.log('Processing GROUPS_QUERY...');
+      const groups = await searchGroupsByKeywords(keywords);
+      console.log('Groups found:', groups.length);
+
+      if (groups.length > 0) {
+        let response = '**🤝 Active Groups:**\n\n';
+        groups.forEach((group, index) => {
+          response += `${index + 1}. **${group.groupName || 'Unnamed Group'}**\n`;
+          response += `   📝 ${group.content.substring(0, 60)}...\n\n`;
+        });
+        response += '\n**📢 Was this helpful?** Tell us if these results were what you needed!';
+        return res.json({ success: true, response });
+      }
+    }
+
+    // --- Step 6.5: Handle Publications Query ---
+    if (queryType.includes('publication') || query.toLowerCase().match(/\b(post|publication|article|blog|share)\b/i)) {
+      console.log('Processing PUBLICATIONS_QUERY...');
+      const publications = await searchPublicationsByKeywords(keywords);
+      console.log('Publications found:', publications.length);
+
+      if (publications.length > 0) {
+        let response = '**📑 Recent Publications:**\n\n';
+        publications.forEach((pub, index) => {
+          response += `${index + 1}. **Publication**\n`;
+          response += `   📝 ${pub.content.substring(0, 80)}...\n`;
+          response += `   👍 ${pub.likeCount || 0} likes\n\n`;
+        });
+        response += '\n**📢 Was this helpful?** Tell us what you think!';
+        return res.json({ success: true, response });
+      }
+    }
+
+    // --- Step 7: Handle AI Use Case Queries ---
+    if (queryType === 'usecase_query') {
+      console.log('Processing USECASE_QUERY...');
+
+      const isGeminiQuery = query.toLowerCase().includes('gemini');
+      const isClaudeQuery = query.toLowerCase().includes('claude');
+
+      let searchTerm = isGeminiQuery ? 'gemini' : (isClaudeQuery ? 'claude' : '');
+      console.log('AI Search Term:', searchTerm);
+
+      if (searchTerm) {
+        let books = await searchBooksByKeywords([searchTerm], query, false);
+        console.log('Books found with AI keyword search:', books.length);
+
+        if (books.length > 0) {
+          const response = formatBooksResponse(books, true);
+          return res.json({ success: true, response });
+        } else {
+          console.log('No AI-specific matches, searching PDF content...');
+          books = await searchBookContentByKeywords([searchTerm]);
+          console.log('Books found with AI PDF search:', books.length);
+
+          if (books.length > 0) {
+            const response = formatBooksResponse(books, true);
+            return res.json({ success: true, response });
+          } else {
+            console.log('No AI-specific books found, showing alternatives...');
+            const allBooks = await getAllPublicBooks();
+
+            let response = `**📖 No books specifically about "${searchTerm}" use cases found.**\n\n`;
+            response += `But here are **other books available** that might interest you:\n\n`;
+
+            if (allBooks.length > 0) {
+              allBooks.slice(0, 5).forEach((book, index) => {
+                response += `${index + 1}. **${book.title}** by *${book.author}*\n`;
+              });
+              response += `\n**💡 Suggestions:**\n- Ask for **all available books**\n- Ask about **authors** in BookHive\n- Try searching with **different keywords**`;
+            } else {
+              response += 'No books are currently available in the system.';
+            }
+
+            return res.json({ success: true, response });
+          }
+        }
+      }
+    }
+
+    // --- Step 8: Handle News Query - NOW SEARCHES WITH KEYWORDS ---
+    if (queryType === 'news_query') {
+      console.log('Processing NEWS_QUERY...');
+      try {
+        let news = [];
+
+        // If keywords provided, search news
+        if (keywords.length > 0) {
+          console.log('Searching news with keywords:', keywords);
+          news = await searchNewsByKeywords(keywords);
+          console.log('News found with keyword search:', news.length);
+        }
+
+        // If no keyword matches, get latest news
+        if (news.length === 0) {
+          console.log('No keyword matches, fetching latest news...');
+          news = await News.find()
+            .select('title content createdAt')
+            .sort({ createdAt: -1 })
+            .limit(5);
+          console.log('Latest news found:', news.length);
+        }
+
+        if (news.length === 0) {
+          return res.json({ success: true, response: '📰 No news available at this time.' });
+        }
+
+        let response = '**📰 Latest News' + (keywords.length > 0 ? ' about ' + keywords.join(', ') : '') + ':**\n\n';
+        news.forEach((item, index) => {
+          response += `${index + 1}. **${item.title}**\n`;
+          response += `   ${item.content.substring(0, 100)}...\n\n`;
+        });
+
+        response += '\n**💡 Want to explore more?** Ask about books, authors, events, or discussions!';
+        response += '\n**📢 Was this helpful?** Let us know your feedback!';
+        return res.json({ success: true, response });
+      } catch (error) {
+        console.error('News query error:', error);
+        return res.json({ success: true, response: 'Unable to fetch news at this moment.' });
+      }
+    }
+
+    // --- Step 9: Handle General Conversation ---
+    console.log('Processing GENERAL_CONVERSATION...');
+    const generalResponses = [
+      "👋 **Hello! I'm the BookHive AI Assistant.**\n\nI can help you with:\n- 📚 **What books are available?** - I'll show you our book collection\n- ✍️ **Who are the authors?** - I'll list all authors in BookHive\n- 📰 **Recent news** - I'll share the latest updates\n- 👥 **Members & Users** - Find community members\n- 📅 **Events** - Upcoming events and conferences\n- 💬 **Discussions** - Active forum discussions\n\n**What would you like to know?**",
+
+      "👋 **Hi there! Welcome to BookHive.**\n\nYou can ask me about:\n- 📚 Available books in our collection\n- ✍️ Authors and their work\n- 📰 Latest news and updates\n- 👥 Community members\n- 📅 Upcoming events\n- 💬 Discussions & forums\n\n**How can I assist you today?**",
+
+      "👋 **I'm here to help!**\n\nYou can ask me:\n- 📚 What books do you have?\n- ✍️ Who are the current authors?\n- 📰 What's new in BookHive?\n- 👥 Members available?\n- 📅 Any upcoming events?\n- 💬 Active discussions?\n\n**What interests you?**"
+    ];
+
+    const randomResponse = generalResponses[Math.floor(Math.random() * generalResponses.length)];
+    return res.json({ success: true, response: randomResponse });
+
+  } catch (err) {
+    console.error('=== CHATBOT ERROR ===', err);
+    res.status(500).json({ success: false, message: 'An error occurred while processing your request. Please try again later.' });
+  }
 });
 
 // ============================================================
 // CHATBOT FEEDBACK API - User Training System
 // ============================================================
 app.post('/api/chatbot/feedback', isAuthenticated, async (req, res) => {
-    try {
-        const { userQuery, botResponse, feedback, correction, correctBookIds } = req.body;
-        
-        if (!userQuery || !botResponse || !feedback) {
-            return res.status(400).json({ success: false, message: 'Missing required fields' });
-        }
-        
-        // Validate feedback type
-        const validFeedback = ['helpful', 'incorrect', 'irrelevant', 'unclear'];
-        if (!validFeedback.includes(feedback)) {
-            return res.status(400).json({ success: false, message: 'Invalid feedback type' });
-        }
-        
-        // Save feedback for training
-        const feedbackRecord = new ChatbotFeedback({
-            userId: req.user._id,
-            userQuery,
-            botResponse,
-            userFeedback: feedback,
-            userCorrection: correction || null,
-            correctBookIds: correctBookIds || []
-        });
-        
-        await feedbackRecord.save();
-        
-        console.log(`Chatbot Feedback Saved: ${feedback} from ${req.user.username}`);
-        console.log(`Query: "${userQuery}"`);
-        if (correction) console.log(`Correction: "${correction}"`);
-        
-        // Get pattern analysis for learning
-        const recentFeedback = await ChatbotFeedback.find()
-            .sort({ createdAt: -1 })
-            .limit(100);
-        
-        // Calculate accuracy
-        const helpfulCount = recentFeedback.filter(f => f.userFeedback === 'helpful').length;
-        const incorrectCount = recentFeedback.filter(f => f.userFeedback === 'incorrect').length;
-        const accuracy = (helpfulCount / recentFeedback.length * 100).toFixed(2);
-        
-        res.json({ 
-            success: true, 
-            message: 'Thank you for your feedback! It helps us improve.',
-            stats: {
-                accuracy: `${accuracy}%`,
-                totalFeedback: recentFeedback.length,
-                helpful: helpfulCount,
-                incorrect: incorrectCount
-            }
-        });
-        
-    } catch (err) {
-        console.error('Chatbot feedback error:', err);
-        res.status(500).json({ success: false, message: 'Error saving feedback' });
+  try {
+    const { userQuery, botResponse, feedback, correction, correctBookIds } = req.body;
+
+    if (!userQuery || !botResponse || !feedback) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
+
+    // Validate feedback type
+    const validFeedback = ['helpful', 'incorrect', 'irrelevant', 'unclear'];
+    if (!validFeedback.includes(feedback)) {
+      return res.status(400).json({ success: false, message: 'Invalid feedback type' });
+    }
+
+    // Save feedback for training
+    const feedbackRecord = new ChatbotFeedback({
+      userId: req.user._id,
+      userQuery,
+      botResponse,
+      userFeedback: feedback,
+      userCorrection: correction || null,
+      correctBookIds: correctBookIds || []
+    });
+
+    await feedbackRecord.save();
+
+    console.log(`Chatbot Feedback Saved: ${feedback} from ${req.user.username}`);
+    console.log(`Query: "${userQuery}"`);
+    if (correction) console.log(`Correction: "${correction}"`);
+
+    // Get pattern analysis for learning
+    const recentFeedback = await ChatbotFeedback.find()
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    // Calculate accuracy
+    const helpfulCount = recentFeedback.filter(f => f.userFeedback === 'helpful').length;
+    const incorrectCount = recentFeedback.filter(f => f.userFeedback === 'incorrect').length;
+    const accuracy = (helpfulCount / recentFeedback.length * 100).toFixed(2);
+
+    res.json({
+      success: true,
+      message: 'Thank you for your feedback! It helps us improve.',
+      stats: {
+        accuracy: `${accuracy}%`,
+        totalFeedback: recentFeedback.length,
+        helpful: helpfulCount,
+        incorrect: incorrectCount
+      }
+    });
+
+  } catch (err) {
+    console.error('Chatbot feedback error:', err);
+    res.status(500).json({ success: false, message: 'Error saving feedback' });
+  }
 });
 
 // ============================================================
 // ADMIN API - View Chatbot Feedback for Training
 // ============================================================
 app.get('/api/chatbot/feedback/stats', isAuthenticated, async (req, res) => {
-    try {
-        // Only admins can view stats
-        if (!req.user.isAdmin) {
-            return res.status(403).json({ success: false, message: 'Admin access required' });
-        }
-        
-        const allFeedback = await ChatbotFeedback.find()
-            .populate('userId', 'username')
-            .populate('correctBookIds', 'title author')
-            .sort({ createdAt: -1 })
-            .limit(100);
-        
-        // Calculate statistics
-        const stats = {
-            totalFeedback: allFeedback.length,
-            helpful: allFeedback.filter(f => f.userFeedback === 'helpful').length,
-            incorrect: allFeedback.filter(f => f.userFeedback === 'incorrect').length,
-            irrelevant: allFeedback.filter(f => f.userFeedback === 'irrelevant').length,
-            unclear: allFeedback.filter(f => f.userFeedback === 'unclear').length,
-            accuracy: ((allFeedback.filter(f => f.userFeedback === 'helpful').length / allFeedback.length) * 100).toFixed(2)
-        };
-        
-        // Common incorrect patterns
-        const incorrectPatterns = allFeedback
-            .filter(f => f.userFeedback === 'incorrect')
-            .map(f => ({ query: f.userQuery, correction: f.userCorrection }));
-        
-        res.json({
-            success: true,
-            stats,
-            recentFeedback: allFeedback.slice(0, 20),
-            incorrectPatterns: incorrectPatterns.slice(0, 10)
-        });
-        
-    } catch (err) {
-        console.error('Feedback stats error:', err);
-        res.status(500).json({ success: false, message: 'Error fetching feedback stats' });
+  try {
+    // Only admins can view stats
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
     }
+
+    const allFeedback = await ChatbotFeedback.find()
+      .populate('userId', 'username')
+      .populate('correctBookIds', 'title author')
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    // Calculate statistics
+    const stats = {
+      totalFeedback: allFeedback.length,
+      helpful: allFeedback.filter(f => f.userFeedback === 'helpful').length,
+      incorrect: allFeedback.filter(f => f.userFeedback === 'incorrect').length,
+      irrelevant: allFeedback.filter(f => f.userFeedback === 'irrelevant').length,
+      unclear: allFeedback.filter(f => f.userFeedback === 'unclear').length,
+      accuracy: ((allFeedback.filter(f => f.userFeedback === 'helpful').length / allFeedback.length) * 100).toFixed(2)
+    };
+
+    // Common incorrect patterns
+    const incorrectPatterns = allFeedback
+      .filter(f => f.userFeedback === 'incorrect')
+      .map(f => ({ query: f.userQuery, correction: f.userCorrection }));
+
+    res.json({
+      success: true,
+      stats,
+      recentFeedback: allFeedback.slice(0, 20),
+      incorrectPatterns: incorrectPatterns.slice(0, 10)
+    });
+
+  } catch (err) {
+    console.error('Feedback stats error:', err);
+    res.status(500).json({ success: false, message: 'Error fetching feedback stats' });
+  }
 });
 
 // ============================================================
 // IMPROVE SEARCH - Based on User Feedback
 // ============================================================
 app.post('/api/chatbot/learn', isAuthenticated, async (req, res) => {
-    try {
-        // Only admins can trigger learning
-        if (!req.user.isAdmin) {
-            return res.status(403).json({ success: false, message: 'Admin access required' });
-        }
-        
-        // Get all incorrect feedback
-        const incorrectFeedback = await ChatbotFeedback.find({ userFeedback: 'incorrect' });
-        
-        // Analyze patterns
-        const queryPatterns = {};
-        incorrectFeedback.forEach(feedback => {
-            const keywords = feedback.userQuery.toLowerCase().split(/\s+/);
-            keywords.forEach(kw => {
-                if (kw.length > 3) {
-                    queryPatterns[kw] = (queryPatterns[kw] || 0) + 1;
-                }
-            });
-        });
-        
-        // Get most problematic queries
-        const sortedPatterns = Object.entries(queryPatterns)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10);
-        
-        res.json({
-            success: true,
-            message: 'Learning analysis complete',
-            analysis: {
-                totalIncorrectResponses: incorrectFeedback.length,
-                problemKeywords: sortedPatterns,
-                recommendations: [
-                    'Review keywords causing incorrect results',
-                    'Consider adding more descriptive book tags',
-                    'Update query classification patterns',
-                    'Check book visibility settings (should be "public")'
-                ]
-            }
-        });
-        
-    } catch (err) {
-        console.error('Learning error:', err);
-        res.status(500).json({ success: false, message: 'Error during learning' });
+  try {
+    // Only admins can trigger learning
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
     }
+
+    // Get all incorrect feedback
+    const incorrectFeedback = await ChatbotFeedback.find({ userFeedback: 'incorrect' });
+
+    // Analyze patterns
+    const queryPatterns = {};
+    incorrectFeedback.forEach(feedback => {
+      const keywords = feedback.userQuery.toLowerCase().split(/\s+/);
+      keywords.forEach(kw => {
+        if (kw.length > 3) {
+          queryPatterns[kw] = (queryPatterns[kw] || 0) + 1;
+        }
+      });
+    });
+
+    // Get most problematic queries
+    const sortedPatterns = Object.entries(queryPatterns)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    res.json({
+      success: true,
+      message: 'Learning analysis complete',
+      analysis: {
+        totalIncorrectResponses: incorrectFeedback.length,
+        problemKeywords: sortedPatterns,
+        recommendations: [
+          'Review keywords causing incorrect results',
+          'Consider adding more descriptive book tags',
+          'Update query classification patterns',
+          'Check book visibility settings (should be "public")'
+        ]
+      }
+    });
+
+  } catch (err) {
+    console.error('Learning error:', err);
+    res.status(500).json({ success: false, message: 'Error during learning' });
+  }
 });
 
 
